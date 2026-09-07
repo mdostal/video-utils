@@ -1,5 +1,7 @@
 # Secrets / config
 .env
+.videorc
+video.toml
 
 # Media — never commit video/audio (huge; GitHub charges for LFS). Back these up elsewhere.
 *.mp4

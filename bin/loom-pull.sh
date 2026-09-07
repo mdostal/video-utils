@@ -2,6 +2,7 @@
 # Download a Loom share to the raws dir. Usage: loom-pull.sh <loom-share-url-or-id> [name]
 # Config: VIDEO_RAWS (dir to save into; default ./raws)
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/load-config.sh"
 RAW="${VIDEO_RAWS:-$PWD/raws}"
 mkdir -p "$RAW"
 IN="${1:?usage: loom-pull.sh <loom-url-or-id> [name]}"

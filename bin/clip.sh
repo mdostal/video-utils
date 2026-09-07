@@ -4,6 +4,7 @@
 #   clip.sh <video> <slug> <start> <end> [name] # cut one manual range (M:SS or seconds)
 # Config: VIDEO_WORK (base dir holding work/ and clips/; default current dir)
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/load-config.sh"
 BASE="${VIDEO_WORK:-$PWD}"
 MP4="${1:?usage: clip.sh <video> <slug> [start end name]}"
 SLUG="${2:?need a slug}"

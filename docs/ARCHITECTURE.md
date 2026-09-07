@@ -23,6 +23,9 @@ $VIDEO_WORK/clips/<slug>/     ── the cut shorts (from clips.json, or a manua
    ▼  caption.sh  (srt always; burn-in optional, needs libass)
 $VIDEO_WORK/work/<slug>/transcript.srt, clips/<slug>/*.captioned.mp4
    │
+   ▼  reframe.sh  (center crop; no face/subject detection)
+$VIDEO_WORK/clips/<slug>/*.9x16.mp4, *.1x1.mp4
+   │
    ▼  (downstream — see ROADMAP: platform publishers, Flayr/Opus)
 ready/  →  published/
 ```
@@ -43,6 +46,11 @@ ready/  →  published/
 All tools are stateless and env-configured (`.env.example`): `GEMINI_API_KEY` (or gcloud secret),
 `VIDEO_RAWS`, `VIDEO_WORK`, `VIDEO_MODEL`, `VIDEO_REVIEW_PROMPT`, `VIDEO_WHISPER_BIN`,
 `VIDEO_WHISPER_MODEL`. No tool hardcodes a path or secret.
+
+Each tool also loads an optional `.videorc`/`video.toml` config-file layer (`bin/lib/videoconfig.py`,
+sourced via `bin/lib/load-config.sh` in bash tools, imported directly in `review.py`) for any of the
+above keys not already set in the environment — env always wins. See README.md's "Config file"
+section.
 
 ## The CLI (bin/video)
 A pure `exec`-based dispatcher: `video <subcommand> [args...]` routes to the matching script in
@@ -65,6 +73,13 @@ call). Burning captions into `clips/<slug>/*.mp4` is opt-in via `VIDEO_CAPTION_B
 ffmpeg build with `libass` (the `subtitles` filter) — a plain Homebrew `ffmpeg` install is not
 guaranteed to have it; `caption.sh` detects this and skips burn-in gracefully (srt generation still
 succeeds) rather than failing on a cryptic ffmpeg filter-parse error.
+
+## Reframe (reframe.sh)
+Exports 9:16 and 1:1 center crops of every `clips/<slug>/*.mp4` as `<name>.9x16.mp4`/`<name>.1x1.mp4`
+siblings (originals untouched; already-derived `.9x16.mp4`/`.1x1.mp4`/`.captioned.mp4` files are
+skipped as sources). Plain center crop computed from the probed source width/height — **no
+face/subject-aware centering** (that would need a detection model dependency; out of scope for now,
+tracked as a gap in docs/ROADMAP.md rather than silently dropped).
 
 ## The judge (review.py)
 Uploads the video to the Gemini File API, polls until `ACTIVE`, then calls `generateContent`

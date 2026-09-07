@@ -5,6 +5,7 @@
 #         VIDEO_CAPTION_BURN=1 (opt-in: burn captions into clips/<slug>/*.mp4)
 #         VIDEO_CAPTION_STYLE (optional ffmpeg subtitles force_style string)
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/load-config.sh"
 BASE="${VIDEO_WORK:-$PWD}"
 SLUG="${1:?usage: caption.sh <slug>}"
 W="$BASE/work/$SLUG"

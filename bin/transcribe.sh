@@ -5,6 +5,7 @@
 #         VIDEO_WHISPER_BIN (path to whisper/whisper.cpp binary; default: auto-detect)
 #         VIDEO_WHISPER_MODEL (model name/path passed to the binary; default: base)
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/load-config.sh"
 BASE="${VIDEO_WORK:-$PWD}"
 SLUG="${1:?usage: transcribe.sh <slug>}"
 W="$BASE/work/$SLUG"

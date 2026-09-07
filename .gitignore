@@ -1,0 +1,24 @@
+# Secrets / config
+.env
+
+# Media — never commit video/audio (huge; GitHub charges for LFS). Back these up elsewhere.
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.wav
+*.m4a
+*.mp3
+raws/
+work/
+clips/
+ready/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

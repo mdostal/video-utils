@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a synthetic (never committed) sample clip.
-# Covers: ingest.sh, caption.sh, clip.sh, reframe.sh, transcribe.sh's
-# missing-binary path, and resumability (VIDEO_FORCE=1) for each.
-# NOT covered: review.py (needs a real paid GEMINI_API_KEY) and
+# Covers: ingest.sh, review.py (via VIDEO_JUDGE_PROVIDER=mock, no real API
+# call), caption.sh, clip.sh, reframe.sh, transcribe.sh's missing-binary
+# path, and resumability (VIDEO_FORCE=1) for each.
+# NOT covered: review.py's real Gemini call (needs a paid GEMINI_API_KEY) and
 # transcribe.sh's real-transcription happy path (needs a real whisper binary).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,6 +54,20 @@ else
   assert_no_file "$TMP/work/demo/transcript.vtt" "transcribe.sh missing-binary"
   pass "transcribe.sh missing-binary path exits 0, writes nothing"
 fi
+
+# --- review.py: mock provider (no real Gemini call, no key needed) ---
+VIDEO_JUDGE_PROVIDER=mock "$BIN/review.py" "$SAMPLE" demo >/dev/null
+assert_file "$TMP/work/demo/review.md" "review.py mock"
+assert_file "$TMP/work/demo/clips.json" "review.py mock"
+pass "review.py (mock provider) produced review.md and clips.json"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/review.py" "$SAMPLE" demo)"
+echo "$out" | grep -qi "skip" || fail "review.py did not report a skip on re-run"
+pass "review.py resumability (skip on re-run)"
+
+rc=0; VIDEO_JUDGE_PROVIDER=bogus-provider "$BIN/review.py" "$SAMPLE" demo >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "review.py should still skip (exit 0) for an unknown provider once already reviewed"
+pass "review.py skip runs before provider resolution (bogus provider name doesn't matter)"
 
 # --- caption.sh: no transcript -> expected failure ---
 rc=0; "$BIN/caption.sh" demo >/dev/null 2>&1 || rc=$?

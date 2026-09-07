@@ -1,0 +1,35 @@
+name: batch-provider-abstraction
+title: "Pluggable judge provider + unattended batch mode"
+description: >
+  Closes two Robustness/quality docs/ROADMAP.md items. Provider abstraction
+  first (review.py's Gemini-specific HTTP calls move behind bin/lib/providers/,
+  selected via VIDEO_JUDGE_PROVIDER; adds a network-free "mock" provider for
+  testing), then batch mode (bin/batch.sh runs the full pipeline unattended
+  over every raw in a folder, continuing past per-video failures) — which
+  the mock provider makes CI-testable without a real paid API call. Fourth
+  epic in the autonomous plan->execute->ship loop (epics 1-3 shipped as
+  v0.1.0/v0.2.0/v0.3.0).
+target_codebase: .
+status: done
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass, same as epics 2-3. Solo-orchestrator, no teammate
+# fan-out/grill loop (no hive/lib runtime here).
+#
+# Scope note: Integrations section and the deferred Thumbnail generator are
+# NOT in this epic (external API/credential decisions pending the operator).
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: provider-abstraction
+    title: "Move review.py's Gemini calls behind a pluggable provider interface"
+    complexity: high
+    depends_on: []
+  - id: batch-mode
+    title: "Add bin/batch.sh — unattended full-pipeline pass over a raws folder"
+    complexity: medium
+    depends_on: [provider-abstraction]

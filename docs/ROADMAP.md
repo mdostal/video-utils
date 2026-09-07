@@ -6,7 +6,7 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 ## Built today
 - ✅ `loom-pull.sh` — Loom share → raw mp4.
 - ✅ `ingest.sh` — register raw, ffprobe metadata, audio extract.
-- ✅ `review.py` — Gemini multimodal judge → `review.md` + `clips.json`.
+- ✅ `review.py` — pluggable-provider judge (Gemini by default) → `review.md` + `clips.json`.
 - ✅ `clip.sh` — cut shorts from `clips.json` or a manual range.
 - ✅ Env-driven config, media/secret git-ignored.
 - ✅ **A real CLI** — one `video` entrypoint wrapping all six stages
@@ -18,9 +18,13 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   Verified for ingest/transcribe/review/reframe/clip; caption.sh's burn-in skip is implemented but
   unverified (blocked by the same missing-libass gap as burn-in itself).
 - ✅ **Test harness** — `tests/smoke.sh` (CI-integrated, `.github/workflows/smoke.yml`) generates its
-  own synthetic sample and covers ingest/caption/clip/reframe + resumability; `review.py` (real paid
-  API call) and `transcribe.sh`'s real-transcription path (needs a real whisper binary) are
-  intentionally excluded from automated CI coverage.
+  own synthetic sample and covers ingest/review(mock)/caption/clip/reframe + resumability;
+  `review.py`'s real Gemini call and `transcribe.sh`'s real-transcription path (needs a real whisper
+  binary) are intentionally excluded from automated CI coverage.
+- ✅ **Provider abstraction** — `review.py`'s Gemini calls moved behind `bin/lib/providers/`, selected
+  via `VIDEO_JUDGE_PROVIDER` (default `gemini`); a network-free `mock` provider proves it's genuinely
+  pluggable and now makes `review.py`'s own logic CI-testable. Only one real backend ships — adding a
+  second (OpenAI/Claude/etc.) would need its own API key decision.
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -45,7 +49,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 
 ## Robustness / quality
 - 🔲 **Batch mode** — process a folder of raws unattended.
-- 🔲 **Provider abstraction** — pluggable judge backend (Gemini today; allow others) behind one interface.
 - 🔲 **Dashboard** — a small local web view of `work/`/`clips/` with the reviews and clip previews.
 
 ## Non-goals (for now)

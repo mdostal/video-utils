@@ -1,0 +1,133 @@
+id: config-file
+epic: reframe-config
+title: "Add .videorc/video.toml config-file fallback beneath env"
+status: done
+complexity: medium
+methodology: classic
+depends_on: []
+
+description: |
+  Add support for a `.videorc` or `video.toml` file in the consuming repo (cwd)
+  as a fallback config layer beneath env vars — per ROADMAP.md: "support a
+  video.toml/.videorc ... in addition to env." Env vars always win; the config
+  file only fills in values that aren't already set in the environment.
+
+  Pre-made decisions:
+  - Lookup order: $VIDEO_CONFIG (explicit path) > ./.videorc > ./video.toml >
+    none (silent no-op).
+  - `.videorc` format: plain `KEY=VALUE` lines, `#` comments, blank lines ignored.
+  - `video.toml` format: a flat `[video]` table, `key = "value"` or `key = value`
+    lines only (no nested tables, no arrays) — parsed with a small regex, not a
+    full TOML parser (AGENTS.md: depend only on common tools; not adding a TOML
+    library dependency for a few flat key=value lines).
+  - Central parser: bin/lib/videoconfig.py — one module, two entry points:
+    - `python3 bin/lib/videoconfig.py --shell` prints `export KEY='VALUE'` lines
+      for every config-declared key NOT already in os.environ (bash scripts
+      `eval` this).
+    - `apply_defaults()` (importable) sets os.environ[k]=v for the same
+      not-already-set keys (review.py, a python script, calls this directly).
+  - Wiring: every existing bin/ script that reads a `VIDEO_*`/`GEMINI_*` env var
+    gets one new line near its top loading these defaults before it reads any
+    env var: bash scripts source `bin/lib/load-config.sh`; review.py imports
+    `bin/lib/videoconfig.py` and calls `apply_defaults()`. bin/video (the
+    dispatcher) does NOT need this — each subprocess it execs loads its own.
+
+  DO NOT:
+  - Add a TOML library dependency (tomllib/tomli) — the regex-based flat-table
+    parser is intentionally minimal, matching the ROADMAP ask's actual scope.
+  - Let a config-file value override an already-set env var — env always wins.
+  - Touch bin/video — it's a pure dispatcher; each wrapped script loads its own config.
+
+acceptance_criteria:
+  - "Given a ./.videorc with VIDEO_WORK=/tmp/x and no VIDEO_WORK env var set, when any wired script runs, then it behaves as if VIDEO_WORK=/tmp/x were exported."
+  - "Given a ./.videorc with VIDEO_WORK=/tmp/x AND VIDEO_WORK=/tmp/y already exported in the environment, when any wired script runs, then the env value (/tmp/y) wins — the config file value is ignored."
+  - "Given a ./video.toml with a [video] table containing whisper_model = \"small\" (no VIDEO_ prefix in the file — mapped to VIDEO_WHISPER_MODEL) is out of scope for this story; keys in the config file must be the exact env var name (e.g. VIDEO_WHISPER_MODEL = \"small\"), not a bare/aliased name, to avoid a second name-mapping layer."
+  - "Given neither .videorc nor video.toml exists and $VIDEO_CONFIG is unset, when any wired script runs, then behavior is unchanged from before this story (no error, no output from the config loader)."
+  - "Given a malformed video.toml (unparseable line), when videoconfig.py runs, then it skips the malformed line with a stderr warning rather than crashing the calling script."
+
+steps:
+  - id: research
+    description: Confirm the exact env var names each existing script reads (VIDEO_WORK, VIDEO_RAWS, VIDEO_MODEL, VIDEO_REVIEW_PROMPT, VIDEO_WHISPER_BIN, VIDEO_WHISPER_MODEL, VIDEO_CAPTION_BURN, VIDEO_CAPTION_STYLE, GEMINI_API_KEY, GEMINI_SECRET_NAME, GEMINI_SECRET_PROJECT) so the config file's supported key set is documented accurately.
+    agent: researcher
+  - id: implement
+    description: Write bin/lib/videoconfig.py (lookup + parse + --shell/apply_defaults) and bin/lib/load-config.sh (bash source-shim), then add the one-line load call to ingest.sh, transcribe.sh, caption.sh, clip.sh, loom-pull.sh (bash) and review.py (python).
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria directly against videoconfig.py's --shell output and apply_defaults(), plus one wired script (e.g. ingest.sh) end-to-end with a .videorc present.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm env-always-wins precedence is correct in every wired script, bin/video was NOT touched, and no TOML library dependency was added.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash, python]
+  key_files:
+    - path: bin/review.py
+      purpose: "The only python script needing apply_defaults() wired in, near the top of main() before get_key()/prompt_text() read env vars."
+    - path: .env.example
+      purpose: "Where the config-file feature itself should be documented (VIDEO_CONFIG, the two file formats, and env-always-wins precedence)."
+
+files_to_modify:
+  - file: bin/lib/videoconfig.py
+    change: "New file — the shared parser/loader, both --shell CLI mode and apply_defaults() importable."
+  - file: bin/lib/load-config.sh
+    change: "New file — bash source-shim: eval's videoconfig.py --shell output."
+  - file: bin/ingest.sh
+    change: "Add one line near the top: source the config loader before BASE=... is read."
+  - file: bin/transcribe.sh
+    change: "Same one-line addition."
+  - file: bin/caption.sh
+    change: "Same one-line addition."
+  - file: bin/clip.sh
+    change: "Same one-line addition."
+  - file: bin/loom-pull.sh
+    change: "Same one-line addition."
+  - file: bin/review.py
+    change: "Import bin/lib/videoconfig.py (sys.path insert) and call apply_defaults() at the top of main(), before get_key()."
+  - file: .env.example
+    change: "Document VIDEO_CONFIG, the .videorc/video.toml formats, and env-always-wins precedence."
+
+code_examples:
+  - title: "Existing env-read pattern each script keeps unchanged (config loader runs BEFORE this line)"
+    file: bin/ingest.sh
+    snippet: |
+      set -euo pipefail
+      BASE="${VIDEO_WORK:-$PWD}"
+
+design_decisions:
+  - decision: "Config keys are exact env var names (VIDEO_WHISPER_MODEL), not aliased/short names."
+    rationale: "Avoids building and maintaining a second name-mapping table; one name per setting, everywhere (env, .videorc, video.toml, docs)."
+  - decision: "video.toml gets a minimal regex parser, not a real TOML library."
+    rationale: "AGENTS.md: depend only on common tools. The ROADMAP ask is flat key=value under one table — a full TOML parser is disproportionate."
+
+cross_cutting:
+  - concern: env-config-only
+    action: "This story IS the config layer — env-config-only is preserved because env still always wins; document VIDEO_CONFIG/.videorc/video.toml in .env.example alongside every other var."
+  - concern: documentation
+    action: "Add a 'Config file (optional)' section to README.md and docs/ARCHITECTURE.md describing .videorc/video.toml, VIDEO_CONFIG, and the env-wins precedence rule."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Config file' bullet to ✅ once all five acceptance criteria are verified; otherwise leave 🚧."
+  - concern: no-secrets-no-media-in-git
+    action: "If an operator's .videorc/video.toml is created in this repo for testing, do not commit it — it's a per-consuming-repo file, not a project file; add .videorc and video.toml to .gitignore so a real operator's local config is never accidentally committed."
+
+risks:
+  - severity: low
+    description: "A regex-based TOML subset parser could silently misparse an edge case (quoted strings with '=' inside them, multi-line values)."
+    mitigation: "Scope is explicitly flat key=value only (no arrays/nested tables/multi-line) — malformed-line handling (AC5) skips rather than crashes, and this is documented as the supported subset, not full TOML."
+  - severity: low
+    description: "Wiring six existing scripts (five bash + review.py) is a wider touch-surface than earlier single-file stories."
+    mitigation: "The change to each existing script is exactly one added line (source the loader) — no existing logic is modified, keeping the diff auditable per-file."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Config file** — support a `video.toml`/`.videorc` in the consuming repo in addition to env.

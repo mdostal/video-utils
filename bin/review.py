@@ -15,6 +15,10 @@ Flow: upload to the Gemini File API → poll ACTIVE → generateContent. No secr
 """
 import sys, os, json, time, subprocess, tempfile, pathlib, re
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "lib"))
+import videoconfig  # noqa: E402
+videoconfig.apply_defaults()
+
 API = "https://generativelanguage.googleapis.com"
 MODEL = os.environ.get("VIDEO_MODEL", "gemini-2.5-flash")
 WORK = pathlib.Path(os.environ.get("VIDEO_WORK", os.getcwd()))

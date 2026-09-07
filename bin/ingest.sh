@@ -9,6 +9,12 @@ MP4="${1:?usage: ingest.sh <video-path> [slug]}"
 [ -f "$MP4" ] || { echo "not found: $MP4"; exit 1; }
 SLUG="${2:-$(basename "${MP4%.*}")}"
 W="$BASE/work/$SLUG"; mkdir -p "$W"
+
+if [ "${VIDEO_FORCE:-0}" != "1" ] && [ -e "$W/source.mp4" ] && [ -f "$W/meta.json" ] && [ -f "$W/audio.wav" ]; then
+  echo "[ingest] already ingested -> $W/ (skip; set VIDEO_FORCE=1 to redo)"
+  exit 0
+fi
+
 ABS="$(cd "$(dirname "$MP4")" && pwd)/$(basename "$MP4")"
 ln -sf "$ABS" "$W/source.mp4"
 

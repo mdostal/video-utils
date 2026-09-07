@@ -74,6 +74,14 @@ ffmpeg build with `libass` (the `subtitles` filter) — a plain Homebrew `ffmpeg
 guaranteed to have it; `caption.sh` detects this and skips burn-in gracefully (srt generation still
 succeeds) rather than failing on a cryptic ffmpeg filter-parse error.
 
+## Resumability
+Every stage (`ingest.sh`, `transcribe.sh`, `review.py`, `caption.sh`, `reframe.sh`, `clip.sh`) checks
+for its own expected output up front and skips the real work — printing a one-line notice, exit 0 —
+when it already exists. `VIDEO_FORCE=1` forces a redo. `review.py`'s skip runs before any Gemini call
+or key lookup, so re-running it on an already-reviewed slug costs nothing. Per-file stages
+(`caption.sh`'s burn-in loop, `reframe.sh`, `clip.sh`'s JSON-driven mode) skip individually, so adding
+a new clip to an existing slug still processes just the new one.
+
 ## Reframe (reframe.sh)
 Exports 9:16 and 1:1 center crops of every `clips/<slug>/*.mp4` as `<name>.9x16.mp4`/`<name>.1x1.mp4`
 siblings (originals untouched; already-derived `.9x16.mp4`/`.1x1.mp4`/`.captioned.mp4` files are

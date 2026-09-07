@@ -65,8 +65,12 @@ for f in "${files[@]}"; do
       "9:16") tn=9; td=16; suffix="9x16" ;;
       "1:1")  tn=1; td=1;  suffix="1x1" ;;
     esac
-    FILTER="$(crop_filter "$W" "$H" "$tn" "$td")"
     out="$CLIPS/${name}.${suffix}.mp4"
+    if [ "${VIDEO_FORCE:-0}" != "1" ] && [ -f "$out" ]; then
+      echo "[reframe] already have $out (skip; set VIDEO_FORCE=1 to redo)"
+      continue
+    fi
+    FILTER="$(crop_filter "$W" "$H" "$tn" "$td")"
     ffmpeg -y -i "$f" -vf "$FILTER" -c:a copy "$out" -loglevel error
     echo "[reframe] wrote $out"
   done

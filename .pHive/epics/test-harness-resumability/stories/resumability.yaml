@@ -1,0 +1,127 @@
+id: resumability
+epic: test-harness-resumability
+title: "Skip stages whose outputs already exist; VIDEO_FORCE=1 to redo"
+status: done
+complexity: medium
+methodology: classic
+depends_on: []
+
+description: |
+  Each stage script checks for its own expected output(s) up front and skips
+  the real work (printing a one-line notice, exit 0) when they already exist —
+  unless VIDEO_FORCE=1 is set. This directly saves real cost on review.py
+  (a paid Gemini call) and real time everywhere else, and is the foundation
+  a future batch-mode story would need (not built here — out of scope).
+
+  Pre-made decisions:
+  - Toggle: VIDEO_FORCE=1 (env, matches the existing VIDEO_CAPTION_BURN=1
+    boolean-env-flag convention) forces a redo regardless of existing output.
+  - Per-script "already done" definition:
+    - ingest.sh: source.mp4, meta.json, audio.wav all exist in work/<slug>/.
+    - transcribe.sh: transcript.vtt AND transcript.txt both exist.
+    - review.py: review.md AND clips.json both exist (this is the highest-value
+      case — skips a real paid Gemini API call).
+    - caption.sh: transcript.srt exists (skips srt regen); independently, the
+      burn-in loop skips any clip whose .captioned.mp4 sibling already exists
+      (per-file, not all-or-nothing — a newly-added clip still gets captioned).
+    - reframe.sh: per (clip, aspect) pair — skip if the derived sibling already
+      exists (same per-file granularity as caption.sh's burn-in skip).
+    - clip.sh: JSON-driven mode skips any individual clip file that already
+      exists; manual-range mode skips if the named output file already exists.
+  - Skip messages follow the existing `[toolname] ...` prefix convention and
+    always mention VIDEO_FORCE=1 as the override.
+
+  DO NOT:
+  - Add a --force CLI flag — VIDEO_FORCE=1 matches the existing env-toggle
+    convention (VIDEO_CAPTION_BURN) and avoids touching each script's
+    positional-arg parsing.
+  - Change bin/video or bin/loom-pull.sh — pulling a fresh Loom share is
+    idempotent-by-naming already (a new `name` arg makes a new file); no
+    "already done" check makes sense there.
+  - Change any output file's *format* — only add a skip-if-exists check before
+    the existing logic runs.
+
+acceptance_criteria:
+  - "Given work/<slug>/{source.mp4,meta.json,audio.wav} already exist, when bin/ingest.sh <video> <slug> runs again without VIDEO_FORCE, then it prints a skip notice and exits 0 without re-running ffprobe/ffmpeg."
+  - "Given the same precondition, when VIDEO_FORCE=1 bin/ingest.sh <video> <slug> runs, then it redoes the work exactly as before this story."
+  - "Given work/<slug>/{review.md,clips.json} already exist, when bin/review.py <video> <slug> runs again without VIDEO_FORCE, then it exits 0 without calling the Gemini API (verified by not requiring GEMINI_API_KEY to be set for the skip path)."
+  - "Given clips/<slug>/01-test.9x16.mp4 already exists, when bin/reframe.sh <slug> runs again without VIDEO_FORCE, then that specific derived file is left untouched (mtime unchanged) while any newly-added clip in the same directory still gets reframed."
+  - "Given clips/<slug>/01-test.captioned.mp4 already exists, when VIDEO_CAPTION_BURN=1 bin/caption.sh <slug> runs again without VIDEO_FORCE, then that file is left untouched (mtime unchanged)."
+
+steps:
+  - id: research
+    description: Re-read each of the six scripts to find the exact point (after arg validation, before the real work) where a skip-and-exit-0 check fits without disturbing existing error paths (e.g. ingest.sh's ffprobe/ffmpeg guards must still run for a genuinely new slug).
+    agent: researcher
+  - id: implement
+    description: Add the skip-if-exists check (VIDEO_FORCE=1 override) to ingest.sh, transcribe.sh, review.py, caption.sh (both the srt step and the per-file burn-in loop), reframe.sh (per clip/aspect pair), and clip.sh (both invocation modes).
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria directly against synthetic clips (mtime comparison via `stat`, and confirming review.py's skip path needs no GEMINI_API_KEY).
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm VIDEO_FORCE=1 correctly bypasses every skip added, and that no script's output format or existing arg-error behavior changed.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash, python]
+  key_files:
+    - path: bin/ingest.sh
+      purpose: "First script to get the skip check; its BASE/slug/W setup runs before the check."
+    - path: bin/review.py
+      purpose: "Highest-value skip target — avoids a real paid Gemini call. main() already computes `out` before get_key() is called; the skip check must run before get_key(), not after."
+
+files_to_modify:
+  - file: bin/ingest.sh
+    change: "Add skip-if-exists check after W is computed, before the ffprobe/ffmpeg blocks."
+  - file: bin/transcribe.sh
+    change: "Add skip-if-exists check after AUDIO is validated, before resolve_bin()."
+  - file: bin/review.py
+    change: "Add skip-if-exists check in main(), right after `out` is computed, before get_key()."
+  - file: bin/caption.sh
+    change: "Add skip-if-exists for the srt step; add per-file skip inside the burn-in loop."
+  - file: bin/reframe.sh
+    change: "Add per (clip, aspect) skip inside the existing nested loop."
+  - file: bin/clip.sh
+    change: "Add skip-if-exists in both the manual-range branch and the JSON-driven python block's per-clip loop."
+
+code_examples:
+  - title: "Existing env-toggle convention to match (VIDEO_FORCE mirrors this shape)"
+    file: bin/caption.sh
+    snippet: |
+      BURN="${VIDEO_CAPTION_BURN:-0}"
+      if [ "$BURN" != "1" ]; then
+        exit 0
+      fi
+
+design_decisions:
+  - decision: "VIDEO_FORCE=1 as a single global override, not per-stage force flags."
+    rationale: "Simpler mental model (one env var, matches VIDEO_CAPTION_BURN's boolean-env shape) and this project has no config-per-run mechanism beyond env/config-file that would benefit from finer granularity yet."
+  - decision: "review.py's skip check runs before get_key(), so GEMINI_API_KEY doesn't even need to be set to benefit from the skip."
+    rationale: "The whole point of this skip is to avoid a real paid API call and its cost/latency — requiring a key just to determine 'already done' would defeat a large part of the value (e.g. re-running a batch script in an environment without the key configured)."
+
+cross_cutting:
+  - concern: documentation
+    action: "Document VIDEO_FORCE=1 in .env.example and add a short 'Resumability' note to docs/ARCHITECTURE.md."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Resumability' bullet to ✅ once all five acceptance criteria are verified."
+  - concern: env-config-only
+    action: "VIDEO_FORCE added to .env.example matching existing comment style."
+
+risks:
+  - severity: low
+    description: "A skip check could mask a partially-written/corrupt prior output (e.g. a truncated audio.wav from an interrupted run) as 'already done'."
+    mitigation: "Out of scope for this story (no output validation/checksumming) — VIDEO_FORCE=1 is the documented escape hatch; flagged here rather than silently assumed away."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Resumability** — skip stages whose outputs already exist; `--force` to redo.

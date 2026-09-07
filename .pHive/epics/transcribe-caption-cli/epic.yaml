@@ -1,0 +1,54 @@
+name: transcribe-caption-cli
+title: "Transcription, auto-captions, and a real CLI entrypoint"
+description: >
+  Closes three near-term docs/ROADMAP.md items: a local Whisper transcription pass,
+  auto-generated/burned-in captions, and a single `video` CLI wrapping all stages.
+  Directly serves the project's north_star success metric ("faster stop-to-post
+  pipeline") — see .pHive/project-profile.yaml.
+target_codebase: /Users/mdostal/Documents/work/video-utils
+methodology: classic
+version_bump: minor
+sidecar_retention: committed
+# NOTE: no hive/lib/html_sidecar_gen runtime is vendored into this repo, so no
+# .html sidecar was actually generated for research-brief.md / design-discussion.md
+# despite sidecar_retention: committed. The .gitignore allowlist policy for
+# "committed" was still applied (epic dir un-ignored) so nothing here is blocked
+# if sidecar generation is added later. Markdown remains canonical either way.
+
+git_flow:
+  base_branch: master
+  # Deviation from the documented main-branch fallback: this repo's only branch at
+  # kickoff was `master` (no `main`, no `develop`) — base_branch is the actual branch
+  # this epic forked from, not a guessed default.
+  branch_strategy: per-epic
+
+planning_team:
+  matched_tags: []
+  roster: [orchestrator-solo]
+  per_tag_reasoning: {}
+  confidence: n/a
+  gate_decisions: {}
+  note: >
+    Ran as a single-orchestrator planning pass — no researcher/technical-writer/tpm
+    teammate fan-out, no grill loop, no CC-Workflows/Multica dispatch. This project
+    has no hive/lib runtime vendored in, and the planning-classification/routing
+    sub-skills assume infrastructure not present here. See design-discussion.md's
+    process note.
+
+stories:
+  - id: transcribe-audio
+    title: "Add bin/transcribe.sh (local Whisper pass)"
+    complexity: medium
+    depends_on: []
+  - id: judge-transcript-integration
+    title: "Feed the transcript into review.py's Gemini prompt"
+    complexity: low
+    depends_on: [transcribe-audio]
+  - id: captions
+    title: "Add bin/caption.sh (.srt generation + optional burn-in)"
+    complexity: medium
+    depends_on: [transcribe-audio]
+  - id: cli-entrypoint
+    title: "Add bin/video dispatcher wrapping all six stages"
+    complexity: low
+    depends_on: [judge-transcript-integration, captions]

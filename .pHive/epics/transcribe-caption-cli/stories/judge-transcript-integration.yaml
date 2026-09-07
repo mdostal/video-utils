@@ -1,0 +1,119 @@
+id: judge-transcript-integration
+epic: transcribe-caption-cli
+title: "Feed the transcript into review.py's Gemini prompt"
+status: pending
+complexity: low
+methodology: classic
+depends_on: [transcribe-audio]
+
+parallel_allowed: true
+parallel_rationale: bounded-slice
+files_to_modify:
+  - file: bin/review.py
+    change: "Read work/<slug>/transcript.txt if present and append it to the Gemini request; no other file touched."
+
+description: |
+  When work/<slug>/transcript.txt exists (written by transcribe.sh), review.py should
+  include it in the request sent to Gemini so the judge's clip picks in clips.json are
+  grounded in what was actually said, not just the visual/audio track. This is the
+  explicit ROADMAP.md ask: "feed the transcript to the judge for better clip picks."
+
+  Pre-made decision: append the transcript as a second `text` part in the `contents[0].parts`
+  array built by generate() (bin/review.py:89-101), after the existing file_data + prompt
+  text parts, prefixed with a short label so Gemini can tell it apart from the review
+  instructions. Do NOT change DEFAULT_PROMPT itself — keep the transcript as separate
+  context, not baked into the prompt template (so VIDEO_REVIEW_PROMPT overrides still work
+  unmodified).
+
+  Behavior when no transcript exists: unchanged — today's video-only request, exactly as
+  now. This story must not make transcribe.sh a hard prerequisite for review.py.
+
+  DO NOT:
+  - Modify DEFAULT_PROMPT or prompt_text() — the transcript is a separate part, not a
+    prompt-template change.
+  - Modify bin/transcribe.sh, bin/caption.sh, or bin/clip.sh.
+  - Add any truncation/summarization logic for long transcripts (flagged as an
+    out-of-scope follow-up risk in design-discussion.md, not this story's job).
+
+acceptance_criteria:
+  - "Given work/<slug>/transcript.txt exists, when bin/review.py <video> <slug> runs, then the Gemini request body's contents[0].parts includes an additional text part containing the transcript content, and review.md/clips.json are still written as before."
+  - "Given work/<slug>/transcript.txt does not exist, when bin/review.py <video> <slug> runs, then the request body is byte-identical in shape to the current (pre-story) behavior — no empty transcript part is added."
+  - "Given VIDEO_REVIEW_PROMPT is set to a custom prompt file, when a transcript is also present, then both the custom prompt and the transcript are sent — the transcript-append logic does not require or assume the default prompt."
+
+steps:
+  - id: research
+    description: Re-confirm the exact shape of the `contents[0].parts` list built in generate() (bin/review.py:89-92) so the new part is inserted without breaking the existing file_data/text part ordering Gemini expects.
+    agent: researcher
+  - id: implement
+    description: Add a helper that reads work/<slug>/transcript.txt (via the WORK/slug path already computed in main(), bin/review.py:109-111) and, if present, appends a labeled text part to the parts list passed into generate().
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Run review.py once with a transcript present and once without, against a short sample clip, confirming review.md/clips.json still get written correctly in both cases. Do not commit the sample.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm no secrets/keys are logged, VIDEO_REVIEW_PROMPT compatibility is preserved, and the transcript-present/absent branches are both exercised.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: /Users/mdostal/Documents/work/video-utils
+  tech_stack:
+    languages: [python]
+  key_files:
+    - path: bin/review.py
+      purpose: "The only file this story modifies. generate() (lines 89-101) builds the Gemini request; main() (lines 103-131) already computes `out = WORK / 'work' / slug`, which is where transcript.txt would live."
+
+files_to_modify:
+  - file: bin/review.py
+    change: "In main(), after computing `out`, check for `out / 'transcript.txt'`; if present, pass its contents into generate() as an extra part."
+
+code_examples:
+  - title: "Current parts list construction (generate(), to extend)"
+    file: bin/review.py
+    snippet: |
+      def generate(key, uri):
+          body = {"contents": [{"parts": [
+              {"file_data": {"mime_type": "video/mp4", "file_uri": uri}},
+              {"text": prompt_text()}]}]}
+  - title: "Where the slug's work dir is already computed (main())"
+    file: bin/review.py
+    snippet: |
+      slug = sys.argv[2] if len(sys.argv) > 2 else pathlib.Path(path).stem
+      out = WORK / "work" / slug
+      out.mkdir(parents=True, exist_ok=True)
+
+design_decisions:
+  - decision: "Transcript is appended as a separate text part, not merged into DEFAULT_PROMPT/prompt_text()."
+    rationale: "Keeps VIDEO_REVIEW_PROMPT overrides working unchanged — the transcript is orthogonal context, not part of the instruction template."
+  - decision: "Silent no-op when transcript.txt is absent — no warning printed."
+    rationale: "transcribe.sh is optional per the epic design (non-fatal when whisper isn't installed); review.py must not treat its absence as noteworthy."
+
+cross_cutting:
+  - concern: documentation
+    action: "Update docs/ARCHITECTURE.md's 'The judge (review.py)' section to mention that a transcript, if present, is included in the request."
+  - concern: honest-status
+    action: "The ROADMAP.md 'Transcription' bullet's sub-clause ('feed the transcript to the judge...') is only satisfied once this story's acceptance criteria pass — coordinate the ✅ flip with transcribe-audio, don't flip it on transcribe-audio alone."
+  - concern: env-config-only
+    action: "No new env vars introduced by this story — verify none were accidentally hardcoded (e.g. a fixed transcript filename is fine since it matches transcribe-audio's fixed output name, not a config value)."
+
+risks:
+  - severity: low
+    description: "Longer transcripts on long recordings could push the Gemini request past a token/size limit."
+    mitigation: "Out of scope for this story (flagged as an epic-level follow-up in design-discussion.md's risk table) — no truncation logic required here."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Transcription** — ...; feed the transcript to the judge for better clip picks.
+  - path: bin/review.py
+    relevant_excerpt: |
+      def generate(key, uri):
+          body = {"contents": [{"parts": [
+              {"file_data": {"mime_type": "video/mp4", "file_uri": uri}},
+              {"text": prompt_text()}]}]}

@@ -1,0 +1,130 @@
+id: captions
+epic: transcribe-caption-cli
+title: "Add bin/caption.sh (.srt generation + optional burn-in)"
+status: pending
+complexity: medium
+methodology: classic
+depends_on: [transcribe-audio]
+
+parallel_allowed: true
+parallel_rationale: bounded-slice
+files_to_modify:
+  - file: bin/caption.sh
+    change: "New file — the captioning tool. Does not modify clip.sh or review.py."
+
+description: |
+  Add bin/caption.sh, a new tool separate from clip.sh (Unix-philosophy: captioning is
+  not clip-cutting). It converts the transcript from transcribe-audio into an .srt file,
+  and optionally burns styled captions into the already-cut clips in clips/<slug>/.
+
+  Pre-made decisions (do not renegotiate):
+  - Input: work/<slug>/transcript.vtt (written by transcribe-audio). Convert to
+    work/<slug>/transcript.srt — always done, cheap, no flag needed.
+  - Burn-in is opt-in via VIDEO_CAPTION_BURN=1 (env) since it's a destructive re-encode of
+    every clip. Default: off (srt generation only).
+  - When burn-in is on: for each file in clips/<slug>/*.mp4, write a sibling
+    clips/<slug>/<name>.captioned.mp4 via ffmpeg's `subtitles` filter — do NOT overwrite
+    the original clip.
+  - VIDEO_CAPTION_STYLE (env, optional) — passed through as the `subtitles` filter's
+    `force_style` argument (e.g. "FontSize=24,PrimaryColour=&H00FFFF&"). If unset, use
+    ffmpeg's default subtitle rendering (no force_style argument).
+  - Usage: caption.sh <slug> — mirrors clip.sh's slug-only invocation shape for the
+    no-manual-range case (bin/clip.sh:9, second positional arg).
+
+  DO NOT:
+  - Modify bin/clip.sh — burn-in reads clips/<slug>/*.mp4 as an already-finished input,
+    it does not hook into the cutting step.
+  - Overwrite an original clip file — burned-in output is always a `.captioned.mp4` sibling.
+  - Modify bin/transcribe.sh or bin/review.py.
+
+acceptance_criteria:
+  - "Given work/<slug>/transcript.vtt exists, when bin/caption.sh <slug> runs with VIDEO_CAPTION_BURN unset, then work/<slug>/transcript.srt is written and no files under clips/<slug>/ are modified, and the script exits 0."
+  - "Given work/<slug>/transcript.vtt exists and clips/<slug>/*.mp4 files exist, when bin/caption.sh <slug> runs with VIDEO_CAPTION_BURN=1, then for every clips/<slug>/<name>.mp4 a new clips/<slug>/<name>.captioned.mp4 is written (original untouched) and the script exits 0."
+  - "Given work/<slug>/transcript.vtt does not exist, when bin/caption.sh <slug> runs, then it exits non-zero with a clear 'run transcribe.sh first' message."
+  - "Given VIDEO_CAPTION_BURN=1 but clips/<slug>/ has no .mp4 files, when bin/caption.sh <slug> runs, then it still writes transcript.srt, prints a 'no clips found to caption' notice, and exits 0 (srt generation must not be blocked by an empty clips dir)."
+
+steps:
+  - id: research
+    description: Confirm the exact ffmpeg subtitles filter invocation for burning in an .srt (path-escaping quirks on macOS/Linux for the subtitles= filter argument, and the force_style parameter syntax) — ffmpeg is already a hard dependency (bin/clip.sh:11) so no new dependency is introduced, only a new filter usage.
+    agent: researcher
+  - id: implement
+    description: Write bin/caption.sh — vtt-to-srt conversion (a small inline python3 block, matching clip.sh's existing pattern of shelling a heredoc'd python block from bash for JSON/text munging at bin/clip.sh:23-37) plus the optional ffmpeg burn-in loop over clips/<slug>/*.mp4.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Run against a short sample clip's transcript + cut clips, both with and without VIDEO_CAPTION_BURN=1, confirming the four acceptance criteria above. Do not commit the sample.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm single-responsibility separation from clip.sh is maintained (no clip.sh changes), env-config-only for VIDEO_CAPTION_BURN/VIDEO_CAPTION_STYLE, and that originals are never overwritten.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: /Users/mdostal/Documents/work/video-utils
+  tech_stack:
+    languages: [bash, python]
+  key_files:
+    - path: bin/clip.sh
+      purpose: "Reference for the BASE/VIDEO_WORK + slug + ffmpeg-required-guard pattern, and for the bash-shells-a-python-heredoc pattern used for structured (JSON) file handling."
+
+files_to_modify:
+  - file: bin/caption.sh
+    change: "New file — srt conversion (always) + optional burn-in (VIDEO_CAPTION_BURN=1)."
+  - file: .env.example
+    change: "Add VIDEO_CAPTION_BURN and VIDEO_CAPTION_STYLE with one-line comments and defaults, in the existing style."
+
+code_examples:
+  - title: "ffmpeg-required guard + BASE/slug setup to mirror"
+    file: bin/clip.sh
+    snippet: |
+      set -euo pipefail
+      BASE="${VIDEO_WORK:-$PWD}"
+      SLUG="${2:?need a slug}"
+      OUT="$BASE/clips/$SLUG"; mkdir -p "$OUT"
+      command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg required (brew install ffmpeg)"; exit 1; }
+  - title: "bash-shells-python-heredoc pattern to mirror for the vtt->srt conversion"
+    file: bin/clip.sh
+    snippet: |
+      python3 - "$MP4" "$OUT" "$JSON" <<'PY'
+      import sys, json, subprocess, os
+      mp4, out, jf = sys.argv[1], sys.argv[2], sys.argv[3]
+      ...
+      PY
+
+design_decisions:
+  - decision: "caption.sh is a separate tool from clip.sh, not a flag on clip.sh."
+    rationale: "AGENTS.md Unix philosophy: each tool does one thing. Captioning has its own failure modes (missing transcript, missing subtitle libs) independent of clip-cutting."
+  - decision: "Burn-in writes a sibling .captioned.mp4 rather than overwriting the original clip."
+    rationale: "Burn-in is a lossy, destructive re-encode; the operator (self-described limited editing experience, per project-profile.yaml north_star) should be able to compare captioned vs. original before choosing one, not lose the clean cut."
+
+cross_cutting:
+  - concern: env-config-only
+    action: "VIDEO_CAPTION_BURN and VIDEO_CAPTION_STYLE added to .env.example matching existing comment style; no hardcoded style string in bin/caption.sh."
+  - concern: documentation
+    action: "Add a row to README.md's tool table and a captioning step to docs/ARCHITECTURE.md's flow diagram + folder contract section (transcript.srt and *.captioned.mp4 as new sibling artifacts)."
+  - concern: honest-status
+    action: "Flip the 'Auto-captions / subtitle burn-in' bullet in docs/ROADMAP.md from 🔲 to ✅ only once all four acceptance criteria are verified against a real sample; otherwise leave it 🚧."
+  - concern: no-secrets-no-media-in-git
+    action: "transcript.srt lands under work/<slug>/ and *.captioned.mp4 lands under clips/<slug>/ — both already covered by existing .gitignore lines (work/, clips/); confirm no new top-level dir is introduced."
+
+risks:
+  - severity: low
+    description: "ffmpeg's subtitles filter has known path-escaping quirks (colons/backslashes in the filter argument, especially on different shells)."
+    mitigation: "research step pins down a working invocation; test step exercises it against a real sample path, not just a synthetic string."
+  - severity: low
+    description: "Burning captions into every clip is slow (full re-encode) for slugs with many clips."
+    mitigation: "Opt-in via VIDEO_CAPTION_BURN=1 — srt-only is the fast default; out of scope to optimize burn-in speed in this story."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Auto-captions / subtitle burn-in** — generate `.srt` and optionally burn styled captions into
+      shorts (retention lever on silent-autoplay feeds).
+  - path: bin/clip.sh
+    relevant_excerpt: |
+      command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg required (brew install ffmpeg)"; exit 1; }

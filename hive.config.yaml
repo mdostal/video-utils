@@ -1,0 +1,30 @@
+# Hive workflow configuration for video-utils.
+# NOT a duplicate of AGENTS.md — build/test/lint commands and code conventions
+# live there. This file is Hive-specific: methodology, task tracking, gates,
+# developer preferences.
+
+metrics:
+  enabled: true
+
+execution:
+  default_methodology: classic
+  # No test infrastructure exists yet (no co-located tests, no test runner,
+  # no BDD keywords found — see project-profile.yaml -> code_quality.test_first_signals).
+  # Classic is the safe default; revisit once docs/ROADMAP.md's "Test harness" item lands.
+
+developer:
+  pr_style: single-commit
+  commit_granularity: medium
+  review_depth: standard
+  notes: null
+
+planning:
+  collaborative_review: true
+
+meta_team:
+  github_forwarding: false
+
+task_tracking:
+  adapter: null
+  # No Linear/GitHub Issues adapter configured at kickoff. Falls back to
+  # prose-runbook mode until an adapter is set up.

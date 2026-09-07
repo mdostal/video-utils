@@ -1,0 +1,130 @@
+id: transcribe-audio
+epic: transcribe-caption-cli
+title: "Add bin/transcribe.sh (local Whisper pass)"
+status: pending
+complexity: medium
+methodology: classic
+depends_on: []
+
+description: |
+  Add a new CLI tool, bin/transcribe.sh, that runs a local Whisper (whisper.cpp by
+  default) pass over the audio already extracted by ingest.sh, writing a timestamped
+  transcript. This is the foundation story for the epic — judge-transcript-integration
+  and captions both consume its output.
+
+  Pre-made decisions (do not renegotiate):
+  - Default binary: whisper.cpp's CLI (commonly `main` or `whisper-cli` depending on
+    build). Rationale: matches AGENTS.md's "depend only on common tools" — whisper.cpp
+    ships as a single compiled binary with no Python/torch runtime, unlike openai-whisper.
+  - VIDEO_WHISPER_BIN (env, optional) — absolute path to the whisper/whisper.cpp binary.
+    If unset, try `whisper-cli`, then `main`, then `whisper` on $PATH, in that order.
+  - VIDEO_WHISPER_MODEL (env, default "base") — passed to the binary's model flag.
+  - Output: work/<slug>/transcript.vtt (WebVTT, timestamped) AND work/<slug>/transcript.txt
+    (plain text, no timestamps — this is what judge-transcript-integration reads).
+  - Non-fatal if the binary isn't found: print an install hint and exit 0 (same pattern
+    as ingest.sh's ffprobe/ffmpeg guards at bin/ingest.sh:14-20 and :22-28) — a pipeline
+    wrapper (cli-entrypoint story) must be able to call this unconditionally.
+
+  DO NOT:
+  - Modify bin/ingest.sh, bin/review.py, bin/clip.sh, or bin/loom-pull.sh — this story
+    only adds bin/transcribe.sh and documents its env vars.
+  - Vendor or install a whisper/whisper.cpp binary as part of this story — it's a
+    bring-your-own-binary dependency, resolved via VIDEO_WHISPER_BIN/$PATH only.
+  - Wire transcript output into review.py's prompt — that's judge-transcript-integration.
+
+acceptance_criteria:
+  - "Given work/<slug>/audio.wav exists (from ingest.sh) and a whisper binary is resolvable, when bin/transcribe.sh <slug> runs, then work/<slug>/transcript.vtt and work/<slug>/transcript.txt are both written and the script exits 0."
+  - "Given no whisper binary is resolvable (VIDEO_WHISPER_BIN unset and none of whisper-cli/main/whisper on $PATH), when bin/transcribe.sh <slug> runs, then it prints an install hint mentioning VIDEO_WHISPER_BIN and exits 0 without creating transcript files."
+  - "Given work/<slug>/audio.wav does not exist, when bin/transcribe.sh <slug> runs, then it exits non-zero with a clear 'run ingest.sh first' message."
+
+steps:
+  - id: research
+    description: Confirm the exact whisper.cpp CLI invocation shape and output flags (VTT + plain text) for the version available in dev/CI; note any flag differences from mainline openai-whisper's CLI if VIDEO_WHISPER_BIN points at that instead.
+    agent: researcher
+  - id: implement
+    description: Write bin/transcribe.sh following the bash conventions in bin/ingest.sh (set -euo pipefail, VIDEO_WORK-based BASE, positional slug arg, non-fatal command -v guards).
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Run against a short sample clip end-to-end (ingest.sh then transcribe.sh) and confirm both transcript files appear and exit code is 0; also test the missing-binary path. Do not commit the sample per AGENTS.md Testing section.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Review for AGENTS.md compliance (single responsibility, env-config-only, no hardcoded paths) and consistency with ingest.sh's guard pattern.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: /Users/mdostal/Documents/work/video-utils
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/ingest.sh
+      purpose: "The direct reference pattern to follow: BASE/VIDEO_WORK convention, slug-based work dir, set -euo pipefail, non-fatal command -v guards for ffprobe/ffmpeg."
+    - path: .env.example
+      purpose: "Where VIDEO_WHISPER_BIN and VIDEO_WHISPER_MODEL must be documented, matching the existing comment style."
+
+files_to_modify:
+  - file: bin/transcribe.sh
+    change: "New file — the transcription tool."
+  - file: .env.example
+    change: "Add VIDEO_WHISPER_BIN and VIDEO_WHISPER_MODEL with one-line comments and defaults, in the existing style."
+
+code_examples:
+  - title: "Non-fatal command -v guard pattern to mirror"
+    file: bin/ingest.sh
+    snippet: |
+      if command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg -y -i "$MP4" -vn -ac 1 -ar 16000 "$W/audio.wav" >/dev/null 2>&1 \
+          && echo "[ingest] audio -> $W/audio.wav (for a transcript pass)" \
+          || echo "[ingest] (audio extract failed — non-fatal)"
+      else
+        echo "[ingest] (ffmpeg not found — install: brew install ffmpeg)"
+      fi
+  - title: "BASE/slug/work-dir setup to mirror"
+    file: bin/ingest.sh
+    snippet: |
+      set -euo pipefail
+      BASE="${VIDEO_WORK:-$PWD}"
+      MP4="${1:?usage: ingest.sh <video-path> [slug]}"
+      SLUG="${2:-$(basename "${MP4%.*}")}"
+      W="$BASE/work/$SLUG"; mkdir -p "$W"
+
+design_decisions:
+  - decision: "whisper.cpp CLI as the default assumed binary, not openai-whisper."
+    rationale: "AGENTS.md: 'depend only on common tools (bash, python3, curl, ffmpeg, optional gcloud)'. whisper.cpp is a single compiled binary; openai-whisper pulls in torch, which is a much heavier dependency than anything else this project assumes."
+  - decision: "Separate .vtt and .txt outputs rather than one file the judge integration story parses."
+    rationale: "judge-transcript-integration only needs plain text for the Gemini prompt; captions needs timestamps. Keeping both avoids either downstream story parsing VTT cue syntax out of a format meant for the other."
+
+cross_cutting:
+  - concern: env-config-only
+    action: "VIDEO_WHISPER_BIN and VIDEO_WHISPER_MODEL added to .env.example with the same one-line-comment + default style as VIDEO_MODEL/VIDEO_REVIEW_PROMPT; no hardcoded binary path or model name in bin/transcribe.sh."
+  - concern: documentation
+    action: "Add a row to README.md's tool table (bin/transcribe.sh <video> [slug] | Local Whisper transcript → transcript.vtt/.txt | whisper.cpp or VIDEO_WHISPER_BIN) and a transcription step to docs/ARCHITECTURE.md's flow diagram + folder contract section."
+  - concern: honest-status
+    action: "Flip the 'Transcription' bullet in docs/ROADMAP.md from 🔲 to ✅ only once both acceptance criteria above are verified against a real sample; otherwise leave it 🚧."
+  - concern: no-secrets-no-media-in-git
+    action: "transcript.vtt/.txt land under work/<slug>/, already git-ignored by the existing 'work/' line in .gitignore — verify no new top-level output dir is introduced that would need a new ignore rule."
+
+risks:
+  - severity: medium
+    description: "whisper.cpp isn't installed on the dev/reviewer's machine, so the happy-path acceptance criterion can't be exercised end-to-end."
+    mitigation: "The missing-binary acceptance criterion (non-fatal exit 0 with install hint) is independently testable without the binary present — verify that path first if whisper.cpp isn't available."
+  - severity: low
+    description: "whisper.cpp CLI flag names vary across builds/versions (e.g. output flags for VTT vs SRT vs plain text)."
+    mitigation: "research step pins down the exact flags for the version actually used; document the assumed version in a comment if it matters."
+
+references:
+  - path: bin/ingest.sh
+    relevant_excerpt: |
+      if command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg -y -i "$MP4" -vn -ac 1 -ar 16000 "$W/audio.wav" >/dev/null 2>&1 \
+          && echo "[ingest] audio -> $W/audio.wav (for a transcript pass)"
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Transcription** — local `whisper` (or whisper.cpp) pass over `audio.wav` → timestamped
+      `transcript.vtt`/`.txt`; feed the transcript to the judge for better clip picks.

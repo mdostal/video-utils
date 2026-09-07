@@ -14,6 +14,7 @@ SRT="$W/transcript.srt"
 
 [ -f "$VTT" ] || { echo "[caption] no $VTT — run transcribe.sh first"; exit 1; }
 
+if [ "${VIDEO_FORCE:-0}" = "1" ] || [ ! -f "$SRT" ]; then
 python3 - "$VTT" "$SRT" <<'PY'
 import sys, re
 vtt_path, srt_path = sys.argv[1], sys.argv[2]
@@ -42,6 +43,9 @@ for b in blocks:
 open(srt_path, "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
 print(f"[caption] wrote {srt_path} ({n} cue(s))")
 PY
+else
+  echo "[caption] already have $SRT (skip; set VIDEO_FORCE=1 to regenerate)"
+fi
 
 BURN="${VIDEO_CAPTION_BURN:-0}"
 if [ "$BURN" != "1" ]; then
@@ -70,6 +74,10 @@ for f in "${files[@]}"; do
   case "$f" in *.captioned.mp4) continue;; esac
   name="$(basename "${f%.mp4}")"
   out="$CLIPS/${name}.captioned.mp4"
+  if [ "${VIDEO_FORCE:-0}" != "1" ] && [ -f "$out" ]; then
+    echo "[caption] already have $out (skip; set VIDEO_FORCE=1 to redo)"
+    continue
+  fi
   ffmpeg -y -i "$f" -vf "$FILTER" -c:a copy "$out" -loglevel error
   echo "[caption] wrote $out"
 done

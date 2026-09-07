@@ -14,6 +14,11 @@ MODEL="${VIDEO_WHISPER_MODEL:-base}"
 
 [ -f "$AUDIO" ] || { echo "[transcribe] no $AUDIO — run ingest.sh first"; exit 1; }
 
+if [ "${VIDEO_FORCE:-0}" != "1" ] && [ -f "$W/transcript.vtt" ] && [ -f "$W/transcript.txt" ]; then
+  echo "[transcribe] already transcribed -> $W/transcript.{vtt,txt} (skip; set VIDEO_FORCE=1 to redo)"
+  exit 0
+fi
+
 resolve_bin() {
   if [ -n "${VIDEO_WHISPER_BIN:-}" ]; then
     echo "$VIDEO_WHISPER_BIN"; return 0

@@ -132,4 +132,29 @@ m3=$(mtime "$TMP/clips/demo/testclip.9x16.mp4")
 [ "$m3" != "$m2" ] || fail "VIDEO_FORCE=1 did not force a redo (reframe.sh)"
 pass "reframe.sh resumability (skip + VIDEO_FORCE=1)"
 
+# --- batch.sh: unattended folder pass (mock provider, no real API) ---
+BATCH_RAWS="$TMP/batch-raws"
+mkdir -p "$BATCH_RAWS"
+ffmpeg -y -f lavfi -i color=c=white:s=320x240:d=1 -f lavfi -i anullsrc=r=16000:cl=mono \
+  -t 1 -shortest "$BATCH_RAWS/batch-a.mp4" -loglevel error
+
+rc=0; "$BIN/batch.sh" /no/such/dir >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "batch.sh should exit non-zero for a nonexistent directory"
+pass "batch.sh fails on a nonexistent directory"
+
+mkdir -p "$TMP/empty-raws"
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$TMP/empty-raws")"
+echo "$out" | grep -qi "no video files found" || fail "batch.sh did not report an empty folder correctly"
+pass "batch.sh handles an empty folder (notice, exit 0)"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$BATCH_RAWS" 2>&1)"
+echo "$out" | grep -q "1 ok, 0 failed, 1 total" || fail "batch.sh summary line was wrong on first run: $(echo "$out" | tail -1)"
+assert_file "$TMP/clips/batch-a/01-mock-clip.9x16.mp4" "batch.sh full pipeline"
+pass "batch.sh ran the full pipeline unattended for one raw (mock provider)"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$BATCH_RAWS" 2>&1)"
+echo "$out" | grep -qi "skip" || fail "batch.sh re-run did not show resumability skips"
+echo "$out" | grep -q "1 ok, 0 failed, 1 total" || fail "batch.sh summary line was wrong on re-run"
+pass "batch.sh re-run is resumable (skips completed stages)"
+
 echo "[smoke] ALL PASS"

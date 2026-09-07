@@ -20,6 +20,7 @@ Bring your own content repo; this is just the tools.
 | `bin/clip.sh <video> <slug> [start end name]` | Cut shorts from `clips.json` or a manual range | ffmpeg |
 | `bin/caption.sh <slug>` | `.srt` from the transcript; optional burn-in into clips | ffmpeg (+ `libass` for burn-in) |
 | `bin/reframe.sh <slug>` | 9:16 and 1:1 center-crop exports of cut clips | ffmpeg/ffprobe |
+| `bin/batch.sh [raws-dir]` | Run the full pipeline unattended over every raw in a folder | (same as the stages it runs) |
 
 ## Quick start
 ```bash

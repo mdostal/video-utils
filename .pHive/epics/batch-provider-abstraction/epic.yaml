@@ -11,6 +11,11 @@ description: >
   v0.1.0/v0.2.0/v0.3.0).
 target_codebase: .
 status: done
+completion_note: >
+  Both stories implemented and verified locally. Also fixed a real gap found
+  along the way: reframe.sh was never wired into bin/video back in epic 2 —
+  added both reframe and batch subcommands now. tests/smoke.sh extended to
+  cover review.py (via mock) and batch.sh end-to-end.
 methodology: classic
 version_bump: minor
 sidecar_retention: transient

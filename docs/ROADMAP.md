@@ -25,6 +25,8 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   via `VIDEO_JUDGE_PROVIDER` (default `gemini`); a network-free `mock` provider proves it's genuinely
   pluggable and now makes `review.py`'s own logic CI-testable. Only one real backend ships — adding a
   second (OpenAI/Claude/etc.) would need its own API key decision.
+- ✅ **Batch mode** — `bin/batch.sh` runs the full pipeline unattended over every raw in a folder,
+  continuing past a failing video rather than aborting the batch; a summary prints at the end.
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -48,7 +50,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🔲 **Backup adapter** — push raws to a backup target (Google Drive, S3, rclone) since media isn't in git.
 
 ## Robustness / quality
-- 🔲 **Batch mode** — process a folder of raws unattended.
 - 🔲 **Dashboard** — a small local web view of `work/`/`clips/` with the reviews and clip previews.
 
 ## Non-goals (for now)

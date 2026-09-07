@@ -1,7 +1,7 @@
 id: batch-mode
 epic: batch-provider-abstraction
 title: "Add bin/batch.sh — unattended full-pipeline pass over a raws folder"
-status: pending
+status: done
 complexity: medium
 methodology: classic
 depends_on: [provider-abstraction]

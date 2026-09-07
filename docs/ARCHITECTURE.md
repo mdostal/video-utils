@@ -89,6 +89,14 @@ skipped as sources). Plain center crop computed from the probed source width/hei
 face/subject-aware centering** (that would need a detection model dependency; out of scope for now,
 tracked as a gap in docs/ROADMAP.md rather than silently dropped).
 
+## Batch mode (batch.sh)
+`batch.sh [raws-dir]` (default `$VIDEO_RAWS`, then `./raws`) runs the full pipeline — ingest ->
+transcribe -> review -> clip (JSON-driven) -> caption -> reframe — unattended over every
+`.mp4`/`.mov`/`.mkv`/`.webm` file found directly in that directory (non-recursive). A failing stage
+for one video does not abort the batch; a `$ok ok, $failed failed, $total total` summary prints at
+the end, and `batch.sh` exits non-zero only if any video had a failed stage. Resumability (above)
+makes re-running `batch.sh` over the same folder cheap — already-completed stages skip.
+
 ## Judge providers (bin/lib/providers/)
 `review.py` is a thin, provider-agnostic CLI: it resolves the transcript (if any) and the review
 prompt (`VIDEO_REVIEW_PROMPT` or the built-in default), then delegates to a provider module selected

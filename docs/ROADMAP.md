@@ -11,8 +11,9 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - ✅ Env-driven config, media/secret git-ignored.
 
 ## Near-term
-- 🔲 **Transcription** — local `whisper` (or whisper.cpp) pass over `audio.wav` → timestamped
-  `transcript.vtt`/`.txt`; feed the transcript to the judge for better clip picks.
+- 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
+  pass over `audio.wav` → timestamped `transcript.vtt`/`.txt`, fed to `review.py`'s judge prompt when
+  present); not yet verified end-to-end against a real recording with a whisper binary installed.
 - 🔲 **Auto-captions / subtitle burn-in** — generate `.srt` and optionally burn styled captions into
   shorts (retention lever on silent-autoplay feeds).
 - 🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for

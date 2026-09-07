@@ -1,7 +1,7 @@
 id: transcribe-audio
 epic: transcribe-caption-cli
 title: "Add bin/transcribe.sh (local Whisper pass)"
-status: pending
+status: done
 complexity: medium
 methodology: classic
 depends_on: []

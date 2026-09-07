@@ -12,7 +12,8 @@ Bring your own content repo; this is just the tools.
 |---|---|---|
 | `bin/loom-pull.sh <url> [name]` | Download a Loom share → `$VIDEO_RAWS` | curl |
 | `bin/ingest.sh <video> [slug]` | Register a raw → `work/<slug>/` + metadata + audio | ffmpeg/ffprobe |
-| `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` | Gemini key |
+| `bin/transcribe.sh <slug>` | Local Whisper transcript → `transcript.vtt`/`.txt` | whisper.cpp (or `VIDEO_WHISPER_BIN`) |
+| `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` (uses the transcript if present) | Gemini key |
 | `bin/clip.sh <video> <slug> [start end name]` | Cut shorts from `clips.json` or a manual range | ffmpeg |
 
 ## Quick start

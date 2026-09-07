@@ -10,10 +10,13 @@ Bring your own content repo; this is just the tools.
 
 | Tool | Does | Needs |
 |---|---|---|
+| `bin/video <subcommand> [args...]` | One entrypoint wrapping every stage below (`--help` for usage) | — |
 | `bin/loom-pull.sh <url> [name]` | Download a Loom share → `$VIDEO_RAWS` | curl |
 | `bin/ingest.sh <video> [slug]` | Register a raw → `work/<slug>/` + metadata + audio | ffmpeg/ffprobe |
-| `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` | Gemini key |
+| `bin/transcribe.sh <slug>` | Local Whisper transcript → `transcript.vtt`/`.txt` | whisper.cpp (or `VIDEO_WHISPER_BIN`) |
+| `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` (uses the transcript if present) | Gemini key |
 | `bin/clip.sh <video> <slug> [start end name]` | Cut shorts from `clips.json` or a manual range | ffmpeg |
+| `bin/caption.sh <slug>` | `.srt` from the transcript; optional burn-in into clips | ffmpeg (+ `libass` for burn-in) |
 
 ## Quick start
 ```bash
@@ -25,6 +28,14 @@ bin/ingest.sh   "$VIDEO_RAWS/my-video.mp4" my-video
 bin/review.py   "$VIDEO_RAWS/my-video.mp4" my-video          # writes work/my-video/review.md + clips.json
 bin/clip.sh     "$VIDEO_RAWS/my-video.mp4" my-video          # cuts work/my-video/clips.json into clips/my-video/
 ```
+
+### Or use the CLI
+Every stage above (plus `transcribe`/`caption`) is also reachable through one entrypoint:
+```bash
+bin/video --help
+bin/video ingest "$VIDEO_RAWS/my-video.mp4" my-video
+```
+`bin/video <subcommand>` is a thin wrapper around the same scripts — either interface works.
 
 ## Config (env)
 See `.env.example`. Key ones: `GEMINI_API_KEY` (or `GEMINI_SECRET_NAME`/`_PROJECT` to pull it from

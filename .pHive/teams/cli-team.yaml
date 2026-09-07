@@ -1,0 +1,52 @@
+name: cli-team
+description: >
+  Core team for video-utils' bash/python CLI toolkit (bin/) and its docs.
+  No frontend/UI domain yet — the planned GitHub Pages showcase site
+  (see project-profile.yaml -> planned_ui) will get its own team once it
+  has a directory to scope against.
+lead: team-lead
+methodology: classic  # from hive.config.yaml -> execution.default_methodology
+
+members:
+  - agent: backend-developer
+    role: Implement and extend the bin/ CLI tools (bash + python)
+    domain:
+      - path: bin/**
+        read: true
+        write: true
+        delete: false
+      - path: .env.example
+        read: true
+        write: true
+        delete: false
+
+  - agent: technical-writer
+    role: Keep README.md, docs/ARCHITECTURE.md, docs/ROADMAP.md honest and in sync
+    domain:
+      - path: README.md
+        read: true
+        write: true
+        delete: false
+      - path: docs/**
+        read: true
+        write: true
+        delete: false
+
+  - agent: reviewer
+    role: Code review against AGENTS.md principles (Unix philosophy, env-config-only, no secrets/media in git, honest ROADMAP status)
+    # no domain override — read-only everywhere per agent default
+
+context:
+  tech_stack:
+    languages: [bash, python]
+    frameworks: []
+  commit_granularity: medium
+  pr_style: single-commit
+  review_depth: standard
+  notes: |
+    Generated from project discovery (kickoff, 2026-09-07).
+    No linters/formatters/pre-commit hooks detected. No test framework yet
+    (docs/ROADMAP.md "Test harness" item). Every new tool must be env-configured
+    per AGENTS.md and documented in README.md's table + .env.example.
+
+team_memory_path: .pHive/team-memories/cli-team/

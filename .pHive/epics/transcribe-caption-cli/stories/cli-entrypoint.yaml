@@ -1,0 +1,120 @@
+id: cli-entrypoint
+epic: transcribe-caption-cli
+title: "Add bin/video dispatcher wrapping all six stages"
+status: done
+complexity: low
+methodology: classic
+depends_on: [judge-transcript-integration, captions]
+
+description: |
+  Add bin/video, a single dispatcher entrypoint wrapping pull|ingest|review|transcribe|
+  caption|clip, plus --help, per the ROADMAP.md "A real CLI" item. Sequenced last so it
+  wraps the final six-subcommand surface once (transcribe.sh and caption.sh must already
+  exist).
+
+  Pre-made decisions (do not renegotiate):
+  - Pure `exec`-based dispatcher: `video <subcommand> [args...]` resolves to
+    `exec "$(dirname "$0")/<subcommand-script>" "$@"` (or the equivalent basename
+    mapping below) — no flag re-parsing, no reimplementation of any script's logic.
+    This directly avoids the "dispatcher drifts out of sync" risk flagged in
+    design-discussion.md.
+  - Subcommand → script mapping:
+    - `pull`      -> loom-pull.sh
+    - `ingest`    -> ingest.sh
+    - `review`    -> review.py
+    - `transcribe`-> transcribe.sh
+    - `caption`   -> caption.sh
+    - `clip`      -> clip.sh
+  - `video --help` / `video` (no args) / `video -h` prints the six subcommands with a
+    one-line description each (pulled from the existing usage comments at the top of
+    each script) and exits 0.
+  - `video <unknown-subcommand>` prints the same help text to stderr and exits 1.
+  - README.md's quick start is NOT rewritten in this story to use `video` as primary
+    (open question 2 in design-discussion.md — decided: keep both interfaces working,
+    only add a short "Or use the CLI" note; the existing script-based quick start stays
+    as the documented default for this epic).
+
+  DO NOT:
+  - Modify the logic of any of the six wrapped scripts — bin/video only routes to them.
+  - Re-parse or validate subcommand-specific flags/arguments inside bin/video — pass
+    "$@" through untouched and let the underlying script handle its own arg errors.
+  - Rewrite README.md's existing quick start section — only append the short CLI note.
+
+acceptance_criteria:
+  - "Given bin/video exists and is executable, when `bin/video ingest <video> <slug>` runs, then it behaves identically to running `bin/ingest.sh <video> <slug>` directly (same output files, same exit code)."
+  - "Given no arguments, when `bin/video` runs, then it prints all six subcommands with one-line descriptions and exits 0."
+  - "Given an unrecognized subcommand, when `bin/video frobnicate` runs, then it prints the help text to stderr and exits 1."
+  - "Given each of the six subcommands, when `bin/video <subcommand> --help`-equivalent invocation is attempted (i.e. missing required args), then the underlying script's own usage/error message surfaces unchanged (the dispatcher does not swallow or rewrite it)."
+
+steps:
+  - id: research
+    description: Read the usage comment/first-arg-required pattern at the top of all four existing scripts plus the two new ones from this epic (transcribe.sh, caption.sh) to extract the one-line descriptions for --help output.
+    agent: researcher
+  - id: implement
+    description: Write bin/video as a pure exec-based dispatcher per the subcommand mapping above; make it executable (chmod +x, matching the other bin/ scripts).
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all four acceptance criteria — run every subcommand through bin/video against a short sample and confirm identical behavior to calling the underlying script directly; test --help/no-args and an unknown subcommand. Do not commit the sample.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm the dispatcher truly does not reimplement or re-parse any subcommand's own logic/flags (pure exec passthrough), and that all six existing tools remain independently invocable (this story must not break direct script usage).
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/ingest.sh
+      purpose: "One of six scripts bin/video wraps; its usage comment (line 3) is a --help text source."
+    - path: bin/clip.sh
+      purpose: "One of six scripts bin/video wraps; its usage comment (lines 2-4) covers two invocation shapes (JSON-driven and manual range) that --help should summarize, not enumerate in full."
+    - path: bin/review.py
+      purpose: "One of six scripts bin/video wraps; a .py file, not .sh — the dispatcher must exec it correctly (it's already shebang'd #!/usr/bin/env python3 per bin/review.py:1, so plain exec works the same as for the bash scripts)."
+
+files_to_modify:
+  - file: bin/video
+    change: "New file — the CLI dispatcher, executable."
+  - file: README.md
+    change: "Add a short 'Or use the CLI' note after the existing Quick start section pointing at `video --help`; do not rewrite the existing script-based quick start."
+
+code_examples:
+  - title: "Usage-comment style to source --help text from"
+    file: bin/ingest.sh
+    snippet: |
+      #!/usr/bin/env bash
+      # Register a raw video: <work>/work/<slug>/ + metadata + audio extract.
+      # Usage: ingest.sh <video-path> [slug]
+      # Config: VIDEO_WORK (output root; default current dir)
+
+design_decisions:
+  - decision: "bin/video is a pure exec-based dispatcher — no flag re-parsing beyond the subcommand name."
+    rationale: "Directly mitigates the 'dispatcher drifts out of sync with underlying scripts' risk in design-discussion.md's risk table — there's no duplicated logic that can go stale."
+  - decision: "README.md's quick start stays script-based; video is documented as an additional, not replacement, interface for this epic."
+    rationale: "Resolves design-discussion.md open question 2 — avoids a doc rewrite whose scope wasn't part of the original ROADMAP.md ask."
+
+cross_cutting:
+  - concern: documentation
+    action: "Add bin/video to README.md's tool table as the recommended entrypoint alongside the existing rows, and add the 'Or use the CLI' note per files_to_modify above; mention it in docs/ARCHITECTURE.md as the wrapping layer over the existing flow."
+  - concern: honest-status
+    action: "Flip the 'A real CLI' bullet in docs/ROADMAP.md from 🔲 to ✅ only once all four acceptance criteria are verified; otherwise leave it 🚧."
+  - concern: env-config-only
+    action: "No new env vars introduced — verify the dispatcher doesn't hardcode any path that should come from VIDEO_WORK/VIDEO_RAWS (it shouldn't need to; it only routes to scripts that already read those)."
+
+risks:
+  - severity: low
+    description: "A subcommand script's own required-arg error message could look confusing when invoked via `video <subcommand>` instead of directly (e.g. an error mentioning 'usage: ingest.sh ...' when the user typed `video ingest`)."
+    mitigation: "Acceptance criterion 4 explicitly requires the underlying message to surface unchanged rather than being rewritten — accepted as a minor, documented rough edge rather than solved with message-rewriting logic that would violate the pure-exec decision."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **A real CLI** — one `video` entrypoint wrapping the stages (`video pull|ingest|review|clip|export`)
+      with `--help`, instead of separate scripts.

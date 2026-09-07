@@ -1,5 +1,7 @@
 # video-utils
 
+[![smoke](https://github.com/mdostal/video-utils/actions/workflows/smoke.yml/badge.svg)](https://github.com/mdostal/video-utils/actions/workflows/smoke.yml)
+
 Small, composable command-line tools for a **build-in-public video pipeline**: pull a raw recording,
 ingest it, let an LLM judge it, and cut shorts — the plumbing between hitting *stop* and hitting *post*.
 
@@ -55,8 +57,10 @@ to this repo — they're per-consuming-repo config, already `.gitignore`d.
   Flayr/Opus hooks, a config/CLI, batch mode, a dashboard). This is the plan-from document.
 
 ## Status
-Early but working: download, ingest, LLM review + auto clip-suggestions, and clipping all run today.
-Everything in `docs/ROADMAP.md` is intended, not built. Contributions welcome once public.
+Working today: download, ingest, local transcription, LLM review + auto clip-suggestions, clipping,
+captions/srt, 9:16/1:1 reframe, a unified CLI, an optional config file, and resumability — see
+`docs/ROADMAP.md` for exactly which parts of each are verified vs. still 🚧. An automated smoke-test
+suite (`tests/smoke.sh`, CI-integrated) covers most of the pipeline; contributions welcome.
 
 ## License
 MIT — see `LICENSE`.

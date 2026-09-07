@@ -9,6 +9,11 @@ description: >
   (epics 1-2 shipped as v0.1.0/v0.2.0).
 target_codebase: .
 status: done
+completion_note: >
+  Both stories implemented and verified. tests/smoke.sh + CI workflow cover
+  ingest/caption/clip/reframe end-to-end plus resumability for each; review.py
+  and transcribe.sh's real-transcription path are intentionally excluded
+  (real paid API call / real whisper binary needed) and documented as such.
 methodology: classic
 version_bump: minor
 sidecar_retention: transient

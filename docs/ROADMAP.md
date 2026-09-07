@@ -17,6 +17,10 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   (an env toggle, not a `--force` CLI flag, matching the project's existing env-config convention).
   Verified for ingest/transcribe/review/reframe/clip; caption.sh's burn-in skip is implemented but
   unverified (blocked by the same missing-libass gap as burn-in itself).
+- ✅ **Test harness** — `tests/smoke.sh` (CI-integrated, `.github/workflows/smoke.yml`) generates its
+  own synthetic sample and covers ingest/caption/clip/reframe + resumability; `review.py` (real paid
+  API call) and `transcribe.sh`'s real-transcription path (needs a real whisper binary) are
+  intentionally excluded from automated CI coverage.
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -40,7 +44,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🔲 **Backup adapter** — push raws to a backup target (Google Drive, S3, rclone) since media isn't in git.
 
 ## Robustness / quality
-- 🔲 **Test harness** — a tiny sample clip + smoke tests per tool in CI.
 - 🔲 **Batch mode** — process a folder of raws unattended.
 - 🔲 **Provider abstraction** — pluggable judge backend (Gemini today; allow others) behind one interface.
 - 🔲 **Dashboard** — a small local web view of `work/`/`clips/` with the reviews and clip previews.

@@ -51,5 +51,7 @@ a wrapped pipeline. When `transcript.txt` exists, `review.py` includes it in the
 ## The judge (review.py)
 Uploads the video to the Gemini File API, polls until `ACTIVE`, then calls `generateContent`
 (`gemini-2.5-flash` by default) with a review prompt that asks for both a prose review and a fenced
-`clips.json` block. The key is read from env or gcloud and never printed. Swap the prompt via
-`VIDEO_REVIEW_PROMPT` to retune what "good" means for your channel.
+`clips.json` block. If `work/<slug>/transcript.txt` exists, it's appended as an extra context part
+in the request so the judge's clip picks are grounded in what was actually said. The key is read
+from env or gcloud and never printed. Swap the prompt via `VIDEO_REVIEW_PROMPT` to retune what
+"good" means for your channel.

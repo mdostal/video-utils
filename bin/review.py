@@ -86,10 +86,14 @@ def wait_active(key, name):
         time.sleep(3)
     sys.exit("Timed out waiting for file to become ACTIVE.")
 
-def generate(key, uri):
-    body = {"contents": [{"parts": [
+def generate(key, uri, transcript=None):
+    parts = [
         {"file_data": {"mime_type": "video/mp4", "file_uri": uri}},
-        {"text": prompt_text()}]}]}
+        {"text": prompt_text()},
+    ]
+    if transcript:
+        parts.append({"text": f"TRANSCRIPT (for reference, use timestamps loosely):\n{transcript}"})
+    body = {"contents": [{"parts": parts}]}
     bf = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
     json.dump(body, bf); bf.close()
     r = sh(["curl", "-s", "-X", "POST",
@@ -110,12 +114,16 @@ def main():
     out = WORK / "work" / slug
     out.mkdir(parents=True, exist_ok=True)
     key = get_key()
+    transcript_file = out / "transcript.txt"
+    transcript = transcript_file.read_text() if transcript_file.exists() else None
+    if transcript:
+        print(f"[review] using transcript from {transcript_file}")
     print(f"[review] uploading {os.path.basename(path)} ...")
     name, uri = upload(key, path)
     print(f"[review] uploaded; waiting for ACTIVE ...")
     wait_active(key, name)
     print("[review] generating review ...")
-    text = generate(key, uri)
+    text = generate(key, uri, transcript)
     (out / "review.md").write_text(f"# Review — {slug}\n\n{text}\n")
     m = re.search(r"```json\s*(\[.*?\])\s*```", text, re.S)
     if m:

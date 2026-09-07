@@ -1,7 +1,7 @@
 id: judge-transcript-integration
 epic: transcribe-caption-cli
 title: "Feed the transcript into review.py's Gemini prompt"
-status: pending
+status: done
 complexity: low
 methodology: classic
 depends_on: [transcribe-audio]

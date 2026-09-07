@@ -1,0 +1,39 @@
+name: test-harness-resumability
+title: "Resumability + an automated smoke-test harness"
+description: >
+  Closes two Robustness/quality docs/ROADMAP.md items. Resumability first
+  (each stage skips work whose output already exists, VIDEO_FORCE=1 to redo),
+  then a test harness that exercises the whole pipeline against ffmpeg-synthesized
+  clips (never committed, per AGENTS.md) — including asserting resumability's
+  skip behavior. Third epic in the autonomous plan->execute->ship loop
+  (epics 1-2 shipped as v0.1.0/v0.2.0).
+target_codebase: .
+status: done
+completion_note: >
+  Both stories implemented and verified. tests/smoke.sh + CI workflow cover
+  ingest/caption/clip/reframe end-to-end plus resumability for each; review.py
+  and transcribe.sh's real-transcription path are intentionally excluded
+  (real paid API call / real whisper binary needed) and documented as such.
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass, same as epic 2 — no separate research-brief/design-discussion
+# doc. Solo-orchestrator, no teammate fan-out/grill loop (no hive/lib runtime here).
+#
+# Scope note: Integrations section (Flayr/Opus Clip/platform publishers) and the
+# deferred Thumbnail generator are explicitly NOT in this epic — they need
+# external API/credential decisions the operator hasn't made yet.
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: resumability
+    title: "Skip stages whose outputs already exist; VIDEO_FORCE=1 to redo"
+    complexity: medium
+    depends_on: []
+  - id: test-harness
+    title: "tests/smoke.sh + CI workflow exercising the full pipeline"
+    complexity: medium
+    depends_on: [resumability]

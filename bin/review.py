@@ -117,6 +117,9 @@ def main():
     slug = sys.argv[2] if len(sys.argv) > 2 else pathlib.Path(path).stem
     out = WORK / "work" / slug
     out.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("VIDEO_FORCE") != "1" and (out / "review.md").exists() and (out / "clips.json").exists():
+        print(f"[review] already reviewed -> {out}/{{review.md,clips.json}} (skip; set VIDEO_FORCE=1 to redo)")
+        return
     key = get_key()
     transcript_file = out / "transcript.txt"
     transcript = transcript_file.read_text() if transcript_file.exists() else None

@@ -1,0 +1,125 @@
+id: test-harness
+epic: test-harness-resumability
+title: "tests/smoke.sh + CI workflow exercising the full pipeline"
+status: done
+complexity: medium
+methodology: classic
+depends_on: [resumability]
+
+description: |
+  Add tests/smoke.sh: generates a tiny synthetic sample video with ffmpeg
+  (lavfi color+tone source — never a real recording, never committed, per
+  AGENTS.md's "No secrets, no media in git" and its Testing section's "run
+  each tool against a short sample clip ... Don't commit the sample"), then
+  runs ingest -> caption(no-transcript-yet path) -> clip -> reframe end to
+  end, asserting expected output files and exit codes at each step, PLUS a
+  second pass asserting resumability's skip behavior (re-run produces no new
+  work, VIDEO_FORCE=1 does). review.py is excluded from the automated harness
+  (it needs a real GEMINI_API_KEY and makes a real paid network call — not
+  something CI should do on every push); transcribe.sh is exercised only for
+  its missing-binary graceful-exit path (no whisper binary assumed in CI).
+  Adds .github/workflows/smoke.yml to run tests/smoke.sh on push and PR.
+
+  Pre-made decisions:
+  - tests/smoke.sh is a single bash script, `set -euo pipefail`, that itself
+    exits non-zero on the first failing assertion (a CI job just runs it).
+  - Uses a temp dir for VIDEO_WORK (mktemp -d), cleaned up on exit via trap,
+    so smoke runs never leave artifacts in the repo working tree.
+  - Covers: ingest.sh, caption.sh (srt-only path, no transcript so it exits 1
+    — asserted as an expected failure, not skipped), clip.sh (manual-range
+    mode), reframe.sh, and the resumability skip/force behavior for each of
+    those. transcribe.sh's missing-binary path (exit 0, no files) is asserted
+    too since it needs no external binary. review.py and transcribe.sh's
+    real-binary happy path are explicitly NOT covered (see above).
+  - CI workflow: .github/workflows/smoke.yml, `ubuntu-latest`, installs
+    ffmpeg via apt, runs `bash tests/smoke.sh`.
+
+  DO NOT:
+  - Commit any media file, sample or otherwise — tests/smoke.sh must generate
+    its own via ffmpeg lavfi every run.
+  - Call the real Gemini API from CI (no GEMINI_API_KEY is available there,
+    and shouldn't be — review.py is excluded from the harness by design).
+  - Require whisper/whisper.cpp to be installed in CI — transcribe.sh's test
+    coverage here is limited to its already-graceful missing-binary path.
+
+acceptance_criteria:
+  - "Given a clean checkout with ffmpeg installed, when `bash tests/smoke.sh` runs, then it exits 0 and prints a per-tool PASS line for every covered tool."
+  - "Given tests/smoke.sh's synthetic clip and a normal first run, when it re-runs the same stage a second time without VIDEO_FORCE, then it asserts the resumability skip message appears (not a re-execution)."
+  - "Given VIDEO_FORCE=1, when a covered stage runs a third time, then it asserts the stage actually redid the work (not skipped)."
+  - "Given tests/smoke.sh completes (success or failure), when the script exits, then its temp VIDEO_WORK directory no longer exists (trap-based cleanup verified)."
+  - "Given .github/workflows/smoke.yml, when inspected, then it runs on push and pull_request, installs ffmpeg, and invokes exactly `bash tests/smoke.sh` with no GEMINI_API_KEY or other secret referenced."
+
+steps:
+  - id: research
+    description: Confirm ffmpeg's lavfi color+anullsrc invocation (already used ad hoc throughout epics 1-2's manual verification) as the canonical synthetic-sample recipe for the harness, and check GitHub's ubuntu-latest runner image ships ffmpeg or needs an apt install step.
+    agent: researcher
+  - id: implement
+    description: Write tests/smoke.sh (trap-based temp-dir cleanup, per-tool PASS/FAIL assertions, resumability skip/force assertions) and .github/workflows/smoke.yml.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Run tests/smoke.sh directly in this environment and confirm all five acceptance criteria; deliberately break one assertion temporarily to confirm the harness actually fails loudly (then revert).
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm no real media is written to the repo, no secrets are referenced in the workflow file, and the harness would genuinely catch a regression in any covered tool.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/clip.sh
+      purpose: "The ffmpeg lavfi synthetic-source pattern used throughout manual epic-1/2 verification is the direct precedent for tests/smoke.sh's sample generation."
+    - path: bin/caption.sh
+      purpose: "Its 'no transcript.vtt -> exit 1' path is asserted as an expected failure in the harness (caption.sh is covered without a real transcript)."
+
+files_to_modify:
+  - file: tests/smoke.sh
+    change: "New file — the smoke-test harness."
+  - file: .github/workflows/smoke.yml
+    change: "New file — CI workflow running tests/smoke.sh on push/PR."
+  - file: AGENTS.md
+    change: "Update the Testing section to point at `bash tests/smoke.sh` as the now-automated baseline, keeping the existing manual-sample guidance for anything the harness doesn't cover (review.py, transcribe.sh's real-binary path)."
+
+code_examples:
+  - title: "Synthetic sample generation pattern (used ad hoc throughout epics 1-2, now formalized)"
+    file: bin/clip.sh
+    snippet: |
+      ffmpeg -y -f lavfi -i color=c=blue:s=640x360:d=1 -f lavfi -i anullsrc=r=16000:cl=mono \
+        -t 1 -shortest sample.mp4 -loglevel error
+
+design_decisions:
+  - decision: "review.py and transcribe.sh's real-transcription path are explicitly out of the automated harness."
+    rationale: "review.py needs a real paid GEMINI_API_KEY and network access — not appropriate for every CI run; transcribe.sh's happy path needs a real whisper binary not assumed present on CI runners. Both gaps are named in the harness's own description rather than silently uncovered."
+  - decision: "The harness is one flat bash script, not a per-tool test file structure."
+    rationale: "Matches the project's existing flat bin/ script style and AGENTS.md's Unix-philosophy — no test framework dependency is introduced, consistent with 'No framework yet' in the original Testing section."
+
+cross_cutting:
+  - concern: documentation
+    action: "Update AGENTS.md's Testing section (see files_to_modify) and add a CI badge/mention to README.md's Status section."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Test harness' bullet to ✅ once all five acceptance criteria pass, and note review.py/transcribe.sh's real-path exclusion in the same bullet."
+  - concern: no-secrets-no-media-in-git
+    action: "This story's entire purpose reinforces this concern — the harness generates and cleans up its own synthetic media every run, and the CI workflow references zero secrets."
+
+risks:
+  - severity: low
+    description: "GitHub's ubuntu-latest runner may or may not ship ffmpeg pre-installed, and the pinned version could change over time."
+    mitigation: "Explicit `apt-get install -y ffmpeg` step in the workflow rather than relying on whatever's pre-installed, so the workflow doesn't silently break on a runner image update."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Test harness** — a tiny sample clip + smoke tests per tool in CI.
+  - path: AGENTS.md
+    relevant_excerpt: |
+      ## Testing
+      No framework yet (a roadmap item). For now: run each tool against a short sample clip and confirm the
+      expected output files appear and the exit code is 0. Don't commit the sample.

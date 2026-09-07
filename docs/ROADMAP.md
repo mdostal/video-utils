@@ -14,8 +14,10 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
   pass over `audio.wav` → timestamped `transcript.vtt`/`.txt`, fed to `review.py`'s judge prompt when
   present); not yet verified end-to-end against a real recording with a whisper binary installed.
-- 🔲 **Auto-captions / subtitle burn-in** — generate `.srt` and optionally burn styled captions into
-  shorts (retention lever on silent-autoplay feeds).
+- 🚧 **Auto-captions / subtitle burn-in** — `bin/caption.sh` generates `.srt` from the transcript
+  (verified) and can burn styled captions into shorts via ffmpeg's `subtitles` filter, but that needs
+  an ffmpeg build with `libass`, which a plain `brew install ffmpeg` does not guarantee — burn-in
+  itself is implemented but not yet verified end-to-end on a libass-enabled build.
 - 🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for
   TikTok/Reels/Shorts from a 16:9 master.
 - 🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."

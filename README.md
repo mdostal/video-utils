@@ -15,6 +15,7 @@ Bring your own content repo; this is just the tools.
 | `bin/transcribe.sh <slug>` | Local Whisper transcript → `transcript.vtt`/`.txt` | whisper.cpp (or `VIDEO_WHISPER_BIN`) |
 | `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` (uses the transcript if present) | Gemini key |
 | `bin/clip.sh <video> <slug> [start end name]` | Cut shorts from `clips.json` or a manual range | ffmpeg |
+| `bin/caption.sh <slug>` | `.srt` from the transcript; optional burn-in into clips | ffmpeg (+ `libass` for burn-in) |
 
 ## Quick start
 ```bash

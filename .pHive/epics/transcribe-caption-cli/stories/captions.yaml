@@ -1,7 +1,7 @@
 id: captions
 epic: transcribe-caption-cli
 title: "Add bin/caption.sh (.srt generation + optional burn-in)"
-status: pending
+status: done
 complexity: medium
 methodology: classic
 depends_on: [transcribe-audio]
@@ -113,6 +113,9 @@ cross_cutting:
     action: "transcript.srt lands under work/<slug>/ and *.captioned.mp4 lands under clips/<slug>/ — both already covered by existing .gitignore lines (work/, clips/); confirm no new top-level dir is introduced."
 
 risks:
+  - severity: medium
+    description: "Discovered during implementation (not anticipated in planning): a plain `brew install ffmpeg` build has no libass, so the `subtitles` filter isn't even registered — burn-in fails with a cryptic ffmpeg filter-parse error, not a clean error."
+    mitigation: "Added an explicit `ffmpeg -filters | grep subtitles` pre-check in bin/caption.sh — if absent, prints a clear message and exits 0 (srt generation, which needs no libass, still succeeds). Burn-in's actual happy path (a real .captioned.mp4 written) is therefore unverified in this environment; docs/ROADMAP.md marks the item 🚧, not ✅."
   - severity: low
     description: "ffmpeg's subtitles filter has known path-escaping quirks (colons/backslashes in the filter argument, especially on different shells)."
     mitigation: "research step pins down a working invocation; test step exercises it against a real sample path, not just a synthetic string."

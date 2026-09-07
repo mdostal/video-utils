@@ -20,15 +20,18 @@ $VIDEO_WORK/work/<slug>/clips.json     ── suggested short moments [{start,en
    ▼  clip.sh
 $VIDEO_WORK/clips/<slug>/     ── the cut shorts (from clips.json, or a manual range)
    │
-   ▼  (downstream — see ROADMAP: captions, platform publishers, Flayr/Opus)
+   ▼  caption.sh  (srt always; burn-in optional, needs libass)
+$VIDEO_WORK/work/<slug>/transcript.srt, clips/<slug>/*.captioned.mp4
+   │
+   ▼  (downstream — see ROADMAP: platform publishers, Flayr/Opus)
 ready/  →  published/
 ```
 
 ## Folder contract
 - `raws/` — masters. Immutable. Backed up off-repo (media is git-ignored).
 - `work/<slug>/` — per-video working state: `source.mp4`, `meta.json`, `audio.wav`, `transcript.vtt`,
-  `transcript.txt`, `review.md`, `clips.json`.
-- `clips/<slug>/` — extracted shorts.
+  `transcript.txt`, `transcript.srt`, `review.md`, `clips.json`.
+- `clips/<slug>/` — extracted shorts, plus `<name>.captioned.mp4` siblings when burn-in is used.
 - `ready/<slug>/`, `published/` — staging and archive (conventions for the consuming repo).
 
 ## Data shapes
@@ -47,6 +50,14 @@ including mainline `openai-whisper`) pass over `work/<slug>/audio.wav`, writing
 `work/<slug>/transcript.vtt` (timestamped) and `work/<slug>/transcript.txt` (plain text). Non-fatal
 if no whisper binary is found — prints an install hint and exits 0, so it's always safe to call in
 a wrapped pipeline. When `transcript.txt` exists, `review.py` includes it in the judge's request.
+
+## Captions (caption.sh)
+Converts `work/<slug>/transcript.vtt` to `work/<slug>/transcript.srt` (always — cheap, no ffmpeg
+call). Burning captions into `clips/<slug>/*.mp4` is opt-in via `VIDEO_CAPTION_BURN=1` and writes a
+`<name>.captioned.mp4` sibling per clip rather than overwriting it (lossy re-encode). Requires an
+ffmpeg build with `libass` (the `subtitles` filter) — a plain Homebrew `ffmpeg` install is not
+guaranteed to have it; `caption.sh` detects this and skips burn-in gracefully (srt generation still
+succeeds) rather than failing on a cryptic ffmpeg filter-parse error.
 
 ## The judge (review.py)
 Uploads the video to the Gemini File API, polls until `ACTIVE`, then calls `generateContent`

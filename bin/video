@@ -12,9 +12,11 @@ subcommands:
   pull        <loom-share-url-or-id> [name]   Download a Loom share -> $VIDEO_RAWS
   ingest      <video> [slug]                  Register a raw -> work/<slug>/ + metadata + audio
   transcribe  <slug>                          Local Whisper transcript -> transcript.vtt/.txt
-  review      <video> [slug]                  LLM judge (Gemini) -> review.md + clips.json
+  review      <video> [slug]                  LLM judge (pluggable provider) -> review.md + clips.json
   caption     <slug>                          .srt from transcript; optional burn-in into clips
   clip        <video> <slug> [start end name] Cut shorts from clips.json or a manual range
+  reframe     <slug>                          9:16 and 1:1 center-crop exports of cut clips
+  batch       [raws-dir]                      Run the full pipeline unattended over a raws folder
 
   video --help | -h | (no args)               Show this help
 EOF
@@ -37,6 +39,10 @@ case "$1" in
     shift; exec "$HERE/caption.sh" "$@" ;;
   clip)
     shift; exec "$HERE/clip.sh" "$@" ;;
+  reframe)
+    shift; exec "$HERE/reframe.sh" "$@" ;;
+  batch)
+    shift; exec "$HERE/batch.sh" "$@" ;;
   *)
     echo "video: unknown subcommand '$1'" >&2
     usage >&2

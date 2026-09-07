@@ -24,11 +24,12 @@ pipeline. It is a **library of tools**, not a content repo — no videos, no per
 
 ## Testing
 `bash tests/smoke.sh` (also run in CI on push/PR, `.github/workflows/smoke.yml`) generates its own
-synthetic sample via ffmpeg and covers `ingest.sh`, `caption.sh`, `clip.sh`, `reframe.sh`,
-`transcribe.sh`'s missing-binary path, and resumability (`VIDEO_FORCE=1`) for each — never commits
-any media. NOT covered: `review.py` (needs a real paid `GEMINI_API_KEY`) and `transcribe.sh`'s real
-transcription (needs a real whisper binary) — for those, run the tool by hand against a short sample
-clip and confirm the expected output files appear and the exit code is 0. Don't commit the sample.
+synthetic sample via ffmpeg and covers `ingest.sh`, `review.py` (via `VIDEO_JUDGE_PROVIDER=mock`, no
+real API call), `caption.sh`, `clip.sh`, `reframe.sh`, `transcribe.sh`'s missing-binary path, and
+resumability (`VIDEO_FORCE=1`) for each — never commits any media. NOT covered: `review.py`'s real
+Gemini call (needs a real paid `GEMINI_API_KEY`) and `transcribe.sh`'s real transcription (needs a
+real whisper binary) — for those, run the tool by hand against a short sample clip and confirm the
+expected output files appear and the exit code is 0. Don't commit the sample.
 
 ## For the planner (Hive)
 `docs/ROADMAP.md` is written to be decomposed into an epic + stories. When planning, treat each

@@ -1,0 +1,139 @@
+id: provider-abstraction
+epic: batch-provider-abstraction
+title: "Move review.py's Gemini calls behind a pluggable provider interface"
+status: done
+complexity: high
+methodology: classic
+depends_on: []
+
+description: |
+  review.py currently hardcodes Gemini's File API upload/poll/generateContent
+  flow inline. Move that into bin/lib/providers/gemini.py behind a documented
+  interface (bin/lib/providers/base.py), selected at runtime via
+  VIDEO_JUDGE_PROVIDER (default "gemini"). Also add bin/lib/providers/mock.py
+  — a network-free, no-key-needed provider that returns a canned response —
+  which makes review.py's OWN logic (resumability skip, review.md/clips.json
+  writing, transcript pass-through) testable in CI without a real paid API
+  call. This does NOT add a second real provider (that would be an external
+  API/credential decision for the operator) — only the interface + the two
+  providers needed to prove it's genuinely pluggable (a real one, a fake one).
+
+  Pre-made decisions:
+  - Interface contract (documented in bin/lib/providers/base.py's module
+    docstring, not an ABC — matches this codebase's plain-function style):
+    a provider module must expose `review(video_path: str, transcript:
+    str | None, prompt: str) -> str`, returning the raw judge response text
+    (a REVIEW section + a fenced \`\`\`json clips array). Provider-specific
+    config (API keys, model names) is read from env INSIDE the provider
+    module — review.py passes only the three review-domain inputs above.
+  - bin/lib/providers/gemini.py gets review.py's existing get_key(),
+    upload(), wait_active(), generate() moved verbatim (adapted to the new
+    review(video_path, transcript, prompt) signature); VIDEO_MODEL stays a
+    valid override, now read inside gemini.py, not review.py.
+  - bin/lib/providers/mock.py's review() returns a fixed REVIEW section plus
+    a fixed 1-item clips.json array; if a transcript is passed, it's echoed
+    into the response so tests can assert transcript pass-through without a
+    real API.
+  - review.py: resolve `PROVIDER_NAME = os.environ.get("VIDEO_JUDGE_PROVIDER",
+    "gemini")`, `importlib.import_module(f"providers.{PROVIDER_NAME}")`, call
+    `provider.review(path, transcript, prompt_text())`. Unknown provider name
+    -> clear error listing available providers (scan bin/lib/providers/*.py,
+    excluding base.py and __init__.py), exit 1.
+  - review.py's resumability skip (added in epic 3) stays unchanged — it runs
+    BEFORE any provider is even imported, so a skip still needs no API key
+    regardless of provider.
+
+  DO NOT:
+  - Implement a second real (network-calling) provider — that needs an
+    external API/credential decision only the operator can make.
+  - Change review.md/clips.json's output format or the regex that extracts
+    the fenced json block from the response text — that logic is
+    provider-agnostic post-processing and stays in review.py.
+  - Change the DEFAULT_PROMPT/prompt_text() review-prompt logic — it's
+    provider-agnostic and stays in review.py, passed into provider.review().
+
+acceptance_criteria:
+  - "Given VIDEO_JUDGE_PROVIDER unset, when bin/review.py runs (mocked network), then it resolves to the gemini provider — behavior identical to before this story."
+  - "Given VIDEO_JUDGE_PROVIDER=mock and no GEMINI_API_KEY set, when bin/review.py <video> <slug> runs, then it writes review.md and clips.json using the mock's canned response, with zero network calls and no key required."
+  - "Given VIDEO_JUDGE_PROVIDER=mock and a transcript.txt present, when bin/review.py runs, then the mock's response embeds the transcript content, proving transcript pass-through survived the refactor."
+  - "Given VIDEO_JUDGE_PROVIDER=nonexistent, when bin/review.py runs, then it exits 1 with an error message listing the available provider names (gemini, mock)."
+  - "Given review.md/clips.json already exist for a slug (resumability from epic 3), when bin/review.py runs with VIDEO_JUDGE_PROVIDER=mock and no VIDEO_FORCE, then it still skips (no provider is even imported) — proving the skip-before-provider-resolution ordering."
+
+steps:
+  - id: research
+    description: Re-read bin/review.py's get_key(), upload(), wait_active(), generate(), and main() in full to identify the exact boundary between "Gemini-specific" (moves to gemini.py) and "provider-agnostic" (stays in review.py) code.
+    agent: researcher
+  - id: implement
+    description: Create bin/lib/providers/{__init__.py,base.py,gemini.py,mock.py}; rewrite review.py to resolve and delegate to a provider via importlib, keeping resumability/prompt/output-writing logic in place.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria — default provider resolution, mock provider end-to-end (no key, no network), transcript pass-through through the mock, unknown-provider error, and skip-before-import ordering.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm gemini.py's behavior is byte-for-byte equivalent to review.py's pre-refactor Gemini flow (same HTTP calls, same env vars honored), and that no provider-agnostic logic leaked into gemini.py.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [python]
+  key_files:
+    - path: bin/review.py
+      purpose: "Source of the code being moved (get_key/upload/wait_active/generate) and the file that becomes a thin provider-dispatching CLI."
+
+files_to_modify:
+  - file: bin/lib/providers/__init__.py
+    change: "New file — empty, makes providers/ an importable package."
+  - file: bin/lib/providers/base.py
+    change: "New file — the interface contract as a module docstring (no executable code needed)."
+  - file: bin/lib/providers/gemini.py
+    change: "New file — get_key/upload/wait_active/generate moved from review.py, exposing review(video_path, transcript, prompt) -> str."
+  - file: bin/lib/providers/mock.py
+    change: "New file — network-free canned-response provider for testing."
+  - file: bin/review.py
+    change: "Remove the moved Gemini-specific functions; add provider resolution (VIDEO_JUDGE_PROVIDER, importlib) and delegate to provider.review()."
+  - file: .env.example
+    change: "Document VIDEO_JUDGE_PROVIDER; note VIDEO_MODEL is now gemini.py-specific."
+
+code_examples:
+  - title: "generate()'s current transcript-part logic (moves into gemini.py's review(), same shape)"
+    file: bin/review.py
+    snippet: |
+      def generate(key, uri, transcript=None):
+          parts = [
+              {"file_data": {"mime_type": "video/mp4", "file_uri": uri}},
+              {"text": prompt_text()},
+          ]
+          if transcript:
+              parts.append({"text": f"TRANSCRIPT (for reference, use timestamps loosely):\n{transcript}"})
+
+design_decisions:
+  - decision: "Plain-function provider modules (a review() function), not a class-based plugin system."
+    rationale: "Matches this codebase's existing style throughout bin/ — no OOP anywhere else; a documented function contract is simpler and sufficient for one interchangeable call."
+  - decision: "The mock provider ships in this repo permanently, not just as a test fixture."
+    rationale: "It's genuinely useful beyond testing — anyone iterating on review.py's file-writing/resumability logic (or wiring a real second provider later) can point VIDEO_JUDGE_PROVIDER=mock at it with zero cost/network."
+
+cross_cutting:
+  - concern: documentation
+    action: "Add a 'Judge providers' section to docs/ARCHITECTURE.md describing the interface and both shipped providers; document VIDEO_JUDGE_PROVIDER in .env.example and README.md."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Provider abstraction' bullet to ✅ once all five acceptance criteria pass, noting only one real provider (Gemini) ships — the abstraction is proven pluggable via the mock, not via a second real backend."
+  - concern: env-config-only
+    action: "VIDEO_JUDGE_PROVIDER added to .env.example; provider-specific env vars (GEMINI_*, VIDEO_MODEL) now documented as gemini.py's own config, not review.py's."
+
+risks:
+  - severity: medium
+    description: "Moving get_key()/upload()/wait_active()/generate() could subtly change behavior (e.g. an env var read at the wrong scope, a changed error message) versus the pre-refactor review.py."
+    mitigation: "The review step explicitly checks byte-for-byte behavioral equivalence against the pre-refactor code, not just 'it still works'."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Provider abstraction** — pluggable judge backend (Gemini today; allow others) behind one interface.

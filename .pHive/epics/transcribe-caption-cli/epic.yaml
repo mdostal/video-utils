@@ -5,7 +5,7 @@ description: >
   auto-generated/burned-in captions, and a single `video` CLI wrapping all stages.
   Directly serves the project's north_star success metric ("faster stop-to-post
   pipeline") — see .pHive/project-profile.yaml.
-target_codebase: /Users/mdostal/Documents/work/video-utils
+target_codebase: .
 methodology: classic
 version_bump: minor
 sidecar_retention: committed

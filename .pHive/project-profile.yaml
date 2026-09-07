@@ -18,8 +18,8 @@ ship_target:
 # Planned but not yet built in this repo — captured so agents don't miss it.
 planned_ui:
   status: not_started
-  pattern: "Same shape as the ../drone-hub project: a public GitHub Pages showcase site (see https://mdostal.github.io/drone-hub/) for this OSS toolkit."
-  reference_project: "drone-hub (siblings at /Users/mdostal/Code/drone-hub and /Users/mdostal/Documents/work/personal/drone-hub) — Next.js app, static-exported to GitHub Pages, already Hive-managed."
+  pattern: "Same shape as the drone-hub project: a public GitHub Pages showcase site (see https://mdostal.github.io/drone-hub/) for this OSS toolkit."
+  reference_project: "drone-hub — a sibling project (Next.js app, static-exported to GitHub Pages, already Hive-managed) the operator pointed to as the UI reference."
   note: >
     video-utils is growing into "a bunch of utilities and things" (per the
     operator) with a UI in the same spirit as drone-hub. has_ui is set to

@@ -65,7 +65,7 @@ steps:
     depends_on: [review]
 
 context:
-  codebase: /Users/mdostal/Documents/work/video-utils
+  codebase: .
   tech_stack:
     languages: [bash, python]
   key_files:

@@ -1,7 +1,7 @@
 id: cli-entrypoint
 epic: transcribe-caption-cli
 title: "Add bin/video dispatcher wrapping all six stages"
-status: pending
+status: done
 complexity: low
 methodology: classic
 depends_on: [judge-transcript-integration, captions]

@@ -44,6 +44,13 @@ All tools are stateless and env-configured (`.env.example`): `GEMINI_API_KEY` (o
 `VIDEO_RAWS`, `VIDEO_WORK`, `VIDEO_MODEL`, `VIDEO_REVIEW_PROMPT`, `VIDEO_WHISPER_BIN`,
 `VIDEO_WHISPER_MODEL`. No tool hardcodes a path or secret.
 
+## The CLI (bin/video)
+A pure `exec`-based dispatcher: `video <subcommand> [args...]` routes to the matching script in
+`bin/` and passes `"$@"` through untouched — it never re-parses or reimplements a subcommand's own
+flags/errors. `video` / `video --help` / `video -h` prints the subcommand list; an unknown
+subcommand prints the same help to stderr and exits 1. Using `video ingest ...` behaves identically
+to calling `bin/ingest.sh ...` directly — both interfaces stay fully supported.
+
 ## Transcription (transcribe.sh)
 Runs a local Whisper (whisper.cpp by default; any CLI pointed at by `VIDEO_WHISPER_BIN` works,
 including mainline `openai-whisper`) pass over `work/<slug>/audio.wav`, writing

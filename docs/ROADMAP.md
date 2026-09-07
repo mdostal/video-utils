@@ -9,6 +9,8 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - ✅ `review.py` — Gemini multimodal judge → `review.md` + `clips.json`.
 - ✅ `clip.sh` — cut shorts from `clips.json` or a manual range.
 - ✅ Env-driven config, media/secret git-ignored.
+- ✅ **A real CLI** — one `video` entrypoint wrapping all six stages
+  (`video pull|ingest|transcribe|review|caption|clip`) with `--help`, instead of separate scripts.
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -21,8 +23,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for
   TikTok/Reels/Shorts from a 16:9 master.
 - 🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."
-- 🔲 **A real CLI** — one `video` entrypoint wrapping the stages (`video pull|ingest|review|clip|export`)
-  with `--help`, instead of separate scripts.
 - 🔲 **Config file** — support a `video.toml`/`.videorc` in the consuming repo in addition to env.
 
 ## Integrations

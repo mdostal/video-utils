@@ -22,3 +22,11 @@ venv/
 
 # OS
 .DS_Store
+
+# Hive machine-local session/telemetry state (contains local paths, session IDs) —
+# not project knowledge, not meant for other contributors. Planning artifacts under
+# .pHive/epics/, .pHive/project-profile.yaml, .pHive/CONTEXT.md, etc. are still tracked.
+.pHive/agent-complete/
+.pHive/interrupts/
+.pHive/metrics/
+.pHive/session-effort.txt

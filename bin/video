@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# One entrypoint wrapping every stage. Usage: video <subcommand> [args...]
+# Pure dispatcher — no flag re-parsing; each subcommand's own script handles its args/errors.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat <<'EOF'
+usage: video <subcommand> [args...]
+
+subcommands:
+  pull        <loom-share-url-or-id> [name]   Download a Loom share -> $VIDEO_RAWS
+  ingest      <video> [slug]                  Register a raw -> work/<slug>/ + metadata + audio
+  transcribe  <slug>                          Local Whisper transcript -> transcript.vtt/.txt
+  review      <video> [slug]                  LLM judge (Gemini) -> review.md + clips.json
+  caption     <slug>                          .srt from transcript; optional burn-in into clips
+  clip        <video> <slug> [start end name] Cut shorts from clips.json or a manual range
+
+  video --help | -h | (no args)               Show this help
+EOF
+}
+
+[ $# -eq 0 ] && { usage; exit 0; }
+
+case "$1" in
+  --help|-h)
+    usage; exit 0 ;;
+  pull)
+    shift; exec "$HERE/loom-pull.sh" "$@" ;;
+  ingest)
+    shift; exec "$HERE/ingest.sh" "$@" ;;
+  transcribe)
+    shift; exec "$HERE/transcribe.sh" "$@" ;;
+  review)
+    shift; exec "$HERE/review.py" "$@" ;;
+  caption)
+    shift; exec "$HERE/caption.sh" "$@" ;;
+  clip)
+    shift; exec "$HERE/clip.sh" "$@" ;;
+  *)
+    echo "video: unknown subcommand '$1'" >&2
+    usage >&2
+    exit 1 ;;
+esac

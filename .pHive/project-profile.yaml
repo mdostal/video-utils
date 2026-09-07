@@ -1,0 +1,163 @@
+project_name: "video-utils"
+type: brownfield
+discovered: "2026-09-07T20:40:25Z"
+source: "AGENTS.md + README.md + docs/ + codebase scan"
+
+project_type: framework
+has_ui: true
+
+ship_target:
+  kind: github-release
+  notes: >
+    MIT open-source CLI toolkit; ships via GitHub releases. A companion
+    showcase/demo UI site is planned (GitHub Pages, modeled on
+    https://mdostal.github.io/drone-hub/ — see planned_ui below); that site
+    will likely ship separately, but the tool releases themselves are
+    github-release.
+
+# Planned but not yet built in this repo — captured so agents don't miss it.
+planned_ui:
+  status: not_started
+  pattern: "Same shape as the drone-hub project: a public GitHub Pages showcase site (see https://mdostal.github.io/drone-hub/) for this OSS toolkit."
+  reference_project: "drone-hub — a sibling project (Next.js app, static-exported to GitHub Pages, already Hive-managed) the operator pointed to as the UI reference."
+  note: >
+    video-utils is growing into "a bunch of utilities and things" (per the
+    operator) with a UI in the same spirit as drone-hub. has_ui is set to
+    true on that basis even though no UI code exists in this repo yet.
+
+# From AGENTS.md / README.md (verbatim or summarized)
+claude_md_summary: |
+  video-utils is a small, open-source (MIT) library of composable CLI tools for a
+  build-in-public video pipeline (pull → ingest → LLM-judge → clip). Not a content repo —
+  no videos or personal data live here.
+
+  Principles (hold these):
+  - Unix philosophy: each tool does one thing, reads/writes plain files, exits non-zero on failure.
+  - Config via env, never hardcode. No absolute paths, personal secret names, or usernames in
+    committed code. Everything configurable comes from env vars documented in .env.example.
+  - No secrets, no media in git. .gitignore blocks .env and all media.
+  - Portable: macOS + Linux; depend only on common tools (bash, python3, curl, ffmpeg, optional gcloud).
+  - Honest status: docs/ROADMAP.md marks what's built vs. intended. Don't claim a stub works.
+
+  Adding a tool: put it in bin/, single responsibility, env-configured; document in README.md's
+  table and docs/ARCHITECTURE.md; add new env vars to .env.example; keep the folder contract
+  (raws → work/<slug>/ → clips/<slug>/ → ready/).
+
+  Testing: no framework yet (roadmap item). For now, run each tool against a short sample clip
+  and confirm expected output files + exit code 0. Don't commit the sample.
+
+  docs/ROADMAP.md is written to be decomposed into an epic + stories — each bullet is a
+  candidate feature.
+
+tech_stack:
+  languages: [bash, python]
+  frameworks: []
+  build_tools: []
+  package_managers: []
+  versions: {}
+
+structure:
+  modules:
+    - name: bin
+      purpose: "The CLI tools: loom-pull.sh, ingest.sh, review.py, clip.sh"
+      source: bin/
+    - name: docs
+      purpose: "Architecture and roadmap documentation"
+      source: docs/
+  entry_points:
+    - bin/loom-pull.sh
+    - bin/ingest.sh
+    - bin/review.py
+    - bin/clip.sh
+
+architecture:
+  pattern: "Unix-pipeline: composable single-purpose scripts sharing a folder contract"
+  di_framework: none
+  state_management: "Filesystem-based (raws/, work/<slug>/, clips/<slug>/, ready/), no in-process state"
+  navigation: n/a
+  data_layer: "Plain files: meta.json (ffprobe output), clips.json (LLM-suggested clip ranges), review.md"
+
+conventions:
+  naming: "kebab-case script names in bin/; slug-based per-video working directories"
+  file_organization: "bin/ for tools, docs/ for architecture/roadmap docs; stage outputs under work/<slug>/ and clips/<slug>/"
+  branching: "single branch (master) so far — only one commit in history"
+  commit_messages: "short imperative summary (e.g. 'Initial video-utils: pull, ingest, LLM-judge, clip')"
+
+test_infrastructure:
+  unit:
+    framework: none
+    location: n/a
+    count: "0 files"
+    coverage_tool: none
+  integration:
+    framework: "manual — run each tool against a short sample clip and confirm outputs + exit code"
+    location: n/a
+  e2e:
+    framework: none
+    location: n/a
+    count: "0 flows"
+  mocking: none
+  test_commands: []
+
+ci_cd:
+  platform: none
+  workflows: []
+  gating: "none — no .github/workflows found"
+
+documentation_found:
+  - path: AGENTS.md
+    content_summary: "Principles, layout, tool-adding checklist, testing note, planner guidance"
+  - path: README.md
+    content_summary: "Tool table, quick start, config, design/roadmap links, status"
+  - path: docs/ARCHITECTURE.md
+    content_summary: "Pipeline flow, folder contract, data shapes, config, review.py internals"
+  - path: docs/ROADMAP.md
+    content_summary: "Built vs. near-term vs. integrations vs. robustness backlog, non-goals"
+
+existing_knowledge:
+  mcp_servers: []
+  existing_skills: []
+  existing_hooks: []
+
+integrations:
+  cli_tools: {}
+  mcp_servers: {}
+  vaults: {}
+
+code_quality:
+  linters: []
+  formatters: []
+  pre_commit:
+    framework: null
+    hooks: []
+  code_snippets:
+    - path: bin/review.py
+      pattern: llm-judge-cli
+      annotation: "Uploads video to the Gemini File API, polls until ACTIVE, then calls generateContent with a review prompt producing prose + a fenced clips.json block."
+      lines: "1-40"
+    - path: bin/clip.sh
+      pattern: ffmpeg-cutter-cli
+      annotation: "Reads clips.json (or a manual start/end range) and cuts shorts with ffmpeg into clips/<slug>/."
+      lines: "1-40"
+  test_first_signals:
+    co_located_tests: false
+    test_before_source: inconclusive
+    test_runner_in_precommit: false
+    bdd_keywords: false
+    test_absence: true
+
+project_maturity: early
+
+north_star:
+  goal: "Go from hitting stop on a recording to a published short with as little manual effort as possible — the plumbing between stop and post."
+  audience: "Solo build-in-public creators — individual devs/creators running their own content pipeline who want composable CLI tools, not a platform."
+  expected_scale: "Single local user — run locally by one person at a time, no concurrency concerns."
+  pain_points: >
+    Manual/slow pipeline stages (transcription, captions, reframing, publishing are still
+    manual or missing per ROADMAP.md) and no CLI/automation polish (separate scripts instead
+    of one entrypoint, no batch mode, no resumability, no tests). The operator also has limited
+    video-editing experience and wants the tool to help start/guide/advise and do some of the
+    initial manual cutting, cropping, rating, and idea generation so they can learn while
+    editing/tweaking — with an eye toward eventually leveraging tools like Opus Clip and other
+    automation so a fully automated suite lets them focus mostly on recording.
+  success: "A faster stop-to-post pipeline — the time/effort from finishing a recording to having published shorts drops significantly."

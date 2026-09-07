@@ -1,0 +1,60 @@
+concerns:
+  - id: documentation
+    name: Documentation Updates
+    description: >
+      When a story changes user-facing behavior, workflow steps, or configuration,
+      corresponding documentation must be updated.
+    applies_when: >
+      Story modifies workflows, schemas, directory structure, configuration files,
+      or adds/removes/renames reference documents
+    planning_prompt: >
+      Which documentation files reference the behavior this story changes?
+      List each doc and what section needs updating.
+    implementation_checklist:
+      - "All docs referencing changed behavior identified"
+      - "Affected sections updated to reflect new behavior"
+      - "No stale references to old behavior remain"
+
+  - id: env-config-only
+    name: Env-Driven Configuration
+    description: >
+      No absolute paths, personal secret names, or usernames may be hardcoded.
+      Every configurable value must come from an env var documented in .env.example.
+    applies_when: >
+      Story adds or changes a tool in bin/, or introduces a new configurable
+      value (path, API key, model name, prompt file, etc.)
+    planning_prompt: >
+      What new env var(s) does this story introduce, and are they documented
+      in .env.example with sane defaults/comments?
+    implementation_checklist:
+      - "No hardcoded absolute paths, secrets, or usernames in committed code"
+      - "New env vars added to .env.example"
+      - "README.md tool table / docs/ARCHITECTURE.md updated if the tool's inputs changed"
+
+  - id: no-secrets-no-media-in-git
+    name: No Secrets or Media in Git
+    description: >
+      .env and all media files stay out of git. Any new tool or fixture must
+      respect the .gitignore contract.
+    applies_when: >
+      Story writes new files to disk, adds a new media format, or touches .gitignore
+    planning_prompt: >
+      Does this story produce any file type not already covered by .gitignore?
+      If so, has .gitignore been updated?
+    implementation_checklist:
+      - "No secrets committed"
+      - "No media files (video/audio) committed"
+      - ".gitignore updated if a new output file type was introduced"
+
+  - id: honest-status
+    name: Honest Status in ROADMAP
+    description: >
+      docs/ROADMAP.md marks what's built vs. intended. A stub or partial
+      implementation must not be marked as fully built (✅).
+    applies_when: >
+      Story implements, partially implements, or removes a ROADMAP.md item
+    planning_prompt: >
+      Does this story fully satisfy the ROADMAP.md bullet it addresses, or
+      should the item stay marked 🚧/🔲?
+    implementation_checklist:
+      - "docs/ROADMAP.md status marker (✅/🚧/🔲) reflects actual completeness"

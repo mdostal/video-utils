@@ -7,6 +7,11 @@ description: >
   .pHive/epics/transcribe-caption-cli/ for the first, v0.1.0).
 target_codebase: .
 status: done
+completion_note: >
+  Both stories implemented and verified end-to-end in this environment
+  (config-file: all 5 ACs pass; reframe: all 5 ACs pass). ROADMAP.md marks
+  reframe 🚧 rather than ✅ because the original bullet's face/subject-aware
+  centering isn't built (plain center crop only, called out explicitly).
 methodology: classic
 version_bump: minor
 sidecar_retention: transient

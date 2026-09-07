@@ -17,6 +17,7 @@ Bring your own content repo; this is just the tools.
 | `bin/review.py <video> [slug]` | **LLM judge** (Gemini) → `review.md` + `clips.json` (uses the transcript if present) | Gemini key |
 | `bin/clip.sh <video> <slug> [start end name]` | Cut shorts from `clips.json` or a manual range | ffmpeg |
 | `bin/caption.sh <slug>` | `.srt` from the transcript; optional burn-in into clips | ffmpeg (+ `libass` for burn-in) |
+| `bin/reframe.sh <slug>` | 9:16 and 1:1 center-crop exports of cut clips | ffmpeg/ffprobe |
 
 ## Quick start
 ```bash

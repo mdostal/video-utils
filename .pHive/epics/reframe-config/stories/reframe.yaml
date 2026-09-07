@@ -1,7 +1,7 @@
 id: reframe
 epic: reframe-config
 title: "Add bin/reframe.sh (9:16 and 1:1 crops of cut clips)"
-status: pending
+status: done
 complexity: medium
 methodology: classic
 depends_on: [config-file]

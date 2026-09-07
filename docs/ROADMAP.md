@@ -22,8 +22,9 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   (verified) and can burn styled captions into shorts via ffmpeg's `subtitles` filter, but that needs
   an ffmpeg build with `libass`, which a plain `brew install ffmpeg` does not guarantee — burn-in
   itself is implemented but not yet verified end-to-end on a libass-enabled build.
-- 🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for
-  TikTok/Reels/Shorts from a 16:9 master.
+- 🚧 **Vertical/short reframe** — `bin/reframe.sh` exports 9:16/1:1 crops of cut clips, verified
+  end-to-end; the face/subject-aware center from the original ask is NOT built (plain center crop
+  only) — would need a real detection-model dependency.
 - 🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."
 
 ## Integrations

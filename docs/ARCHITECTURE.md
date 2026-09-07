@@ -89,10 +89,27 @@ skipped as sources). Plain center crop computed from the probed source width/hei
 face/subject-aware centering** (that would need a detection model dependency; out of scope for now,
 tracked as a gap in docs/ROADMAP.md rather than silently dropped).
 
-## The judge (review.py)
-Uploads the video to the Gemini File API, polls until `ACTIVE`, then calls `generateContent`
-(`gemini-2.5-flash` by default) with a review prompt that asks for both a prose review and a fenced
-`clips.json` block. If `work/<slug>/transcript.txt` exists, it's appended as an extra context part
-in the request so the judge's clip picks are grounded in what was actually said. The key is read
-from env or gcloud and never printed. Swap the prompt via `VIDEO_REVIEW_PROMPT` to retune what
-"good" means for your channel.
+## Batch mode (batch.sh)
+`batch.sh [raws-dir]` (default `$VIDEO_RAWS`, then `./raws`) runs the full pipeline — ingest ->
+transcribe -> review -> clip (JSON-driven) -> caption -> reframe — unattended over every
+`.mp4`/`.mov`/`.mkv`/`.webm` file found directly in that directory (non-recursive). A failing stage
+for one video does not abort the batch; a `$ok ok, $failed failed, $total total` summary prints at
+the end, and `batch.sh` exits non-zero only if any video had a failed stage. Resumability (above)
+makes re-running `batch.sh` over the same folder cheap — already-completed stages skip.
+
+## Judge providers (bin/lib/providers/)
+`review.py` is a thin, provider-agnostic CLI: it resolves the transcript (if any) and the review
+prompt (`VIDEO_REVIEW_PROMPT` or the built-in default), then delegates to a provider module selected
+by `VIDEO_JUDGE_PROVIDER` (default `gemini`). A provider exposes one function —
+`review(video_path, transcript, prompt) -> str` (see `bin/lib/providers/base.py`) — and owns all of
+its own config (API keys, model names). `review.py` parses the returned text for a `REVIEW` section
+and a fenced `clips.json` block; that parsing is provider-agnostic.
+
+- **`gemini`** (default) — uploads the video to the Gemini File API, polls until `ACTIVE`, then calls
+  `generateContent` (`gemini-2.5-flash` by default, `VIDEO_MODEL` to override). The key is read from
+  `GEMINI_API_KEY` or gcloud (`GEMINI_SECRET_NAME`/`GEMINI_SECRET_PROJECT`) and never printed.
+- **`mock`** — a network-free provider for tests and local iteration: returns a canned response
+  (echoing the transcript back if one was passed), no key or network needed. `VIDEO_JUDGE_PROVIDER=mock`.
+
+Only one real backend ships today; the interface is proven pluggable via `mock`, not via a second
+real provider (adding e.g. OpenAI/Claude would be a future ROADMAP item needing its own API key).

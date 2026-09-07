@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a synthetic (never committed) sample clip.
-# Covers: ingest.sh, caption.sh, clip.sh, reframe.sh, transcribe.sh's
-# missing-binary path, and resumability (VIDEO_FORCE=1) for each.
-# NOT covered: review.py (needs a real paid GEMINI_API_KEY) and
+# Covers: ingest.sh, review.py (via VIDEO_JUDGE_PROVIDER=mock, no real API
+# call), caption.sh, clip.sh, reframe.sh, transcribe.sh's missing-binary
+# path, and resumability (VIDEO_FORCE=1) for each.
+# NOT covered: review.py's real Gemini call (needs a paid GEMINI_API_KEY) and
 # transcribe.sh's real-transcription happy path (needs a real whisper binary).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -53,6 +54,20 @@ else
   assert_no_file "$TMP/work/demo/transcript.vtt" "transcribe.sh missing-binary"
   pass "transcribe.sh missing-binary path exits 0, writes nothing"
 fi
+
+# --- review.py: mock provider (no real Gemini call, no key needed) ---
+VIDEO_JUDGE_PROVIDER=mock "$BIN/review.py" "$SAMPLE" demo >/dev/null
+assert_file "$TMP/work/demo/review.md" "review.py mock"
+assert_file "$TMP/work/demo/clips.json" "review.py mock"
+pass "review.py (mock provider) produced review.md and clips.json"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/review.py" "$SAMPLE" demo)"
+echo "$out" | grep -qi "skip" || fail "review.py did not report a skip on re-run"
+pass "review.py resumability (skip on re-run)"
+
+rc=0; VIDEO_JUDGE_PROVIDER=bogus-provider "$BIN/review.py" "$SAMPLE" demo >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 0 ] || fail "review.py should still skip (exit 0) for an unknown provider once already reviewed"
+pass "review.py skip runs before provider resolution (bogus provider name doesn't matter)"
 
 # --- caption.sh: no transcript -> expected failure ---
 rc=0; "$BIN/caption.sh" demo >/dev/null 2>&1 || rc=$?
@@ -116,5 +131,30 @@ VIDEO_FORCE=1 "$BIN/reframe.sh" demo >/dev/null
 m3=$(mtime "$TMP/clips/demo/testclip.9x16.mp4")
 [ "$m3" != "$m2" ] || fail "VIDEO_FORCE=1 did not force a redo (reframe.sh)"
 pass "reframe.sh resumability (skip + VIDEO_FORCE=1)"
+
+# --- batch.sh: unattended folder pass (mock provider, no real API) ---
+BATCH_RAWS="$TMP/batch-raws"
+mkdir -p "$BATCH_RAWS"
+ffmpeg -y -f lavfi -i color=c=white:s=320x240:d=1 -f lavfi -i anullsrc=r=16000:cl=mono \
+  -t 1 -shortest "$BATCH_RAWS/batch-a.mp4" -loglevel error
+
+rc=0; "$BIN/batch.sh" /no/such/dir >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "batch.sh should exit non-zero for a nonexistent directory"
+pass "batch.sh fails on a nonexistent directory"
+
+mkdir -p "$TMP/empty-raws"
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$TMP/empty-raws")"
+echo "$out" | grep -qi "no video files found" || fail "batch.sh did not report an empty folder correctly"
+pass "batch.sh handles an empty folder (notice, exit 0)"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$BATCH_RAWS" 2>&1)"
+echo "$out" | grep -q "1 ok, 0 failed, 1 total" || fail "batch.sh summary line was wrong on first run: $(echo "$out" | tail -1)"
+assert_file "$TMP/clips/batch-a/01-mock-clip.9x16.mp4" "batch.sh full pipeline"
+pass "batch.sh ran the full pipeline unattended for one raw (mock provider)"
+
+out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$BATCH_RAWS" 2>&1)"
+echo "$out" | grep -qi "skip" || fail "batch.sh re-run did not show resumability skips"
+echo "$out" | grep -q "1 ok, 0 failed, 1 total" || fail "batch.sh summary line was wrong on re-run"
+pass "batch.sh re-run is resumable (skips completed stages)"
 
 echo "[smoke] ALL PASS"

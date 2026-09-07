@@ -1,0 +1,122 @@
+id: batch-mode
+epic: batch-provider-abstraction
+title: "Add bin/batch.sh — unattended full-pipeline pass over a raws folder"
+status: done
+complexity: medium
+methodology: classic
+depends_on: [provider-abstraction]
+
+description: |
+  Add bin/batch.sh <raws-dir>, running the full pipeline (ingest -> transcribe
+  -> review -> clip -> caption -> reframe) for every video file found,
+  unattended — a single failing stage/video does not abort the batch; a
+  summary prints at the end. Resumability (epic 3) makes re-running batch.sh
+  over the same folder cheap. Testable in CI via VIDEO_JUDGE_PROVIDER=mock
+  (from provider-abstraction), so no real API key/network is needed to
+  exercise the whole chain.
+
+  Pre-made decisions:
+  - Usage: batch.sh [raws-dir] — defaults to $VIDEO_RAWS, then ./raws.
+  - File discovery: *.mp4, *.mov, *.mkv, *.webm directly in the given
+    directory (non-recursive — matches raws/ being a flat archive per
+    docs/ARCHITECTURE.md's folder contract).
+  - Slug per file: basename without extension (same default rule ingest.sh
+    already uses when no slug arg is given).
+  - Pipeline order per file: ingest.sh -> transcribe.sh -> review.py ->
+    clip.sh (JSON-driven mode, no manual range) -> caption.sh -> reframe.sh.
+  - Failure handling: `set -uo pipefail` (NOT `-e`) — a stage's non-zero exit
+    is caught per-video (`|| stage_failed=1` for ingest.sh/review.py/clip.sh,
+    `|| true` for transcribe.sh/caption.sh/reframe.sh which already have
+    their own legitimate non-fatal-skip exit codes from earlier epics).
+    Processing continues to the next video regardless.
+  - Summary line at the end: "$ok ok, $failed failed, $total total"; batch.sh
+    itself exits non-zero if any video had a failed stage (so CI/a caller can
+    detect a bad batch), but only after processing every file.
+
+  DO NOT:
+  - Add recursive directory scanning or a config file for which extensions to
+    scan — the four extensions above match what loom-pull.sh/ingest.sh
+    already assume (mp4-centric, per README's quick start).
+  - Retry a failed stage — one attempt per stage per video; VIDEO_FORCE=1
+    plus a manual re-run of batch.sh is the retry mechanism (resumability
+    from epic 3 makes that cheap — already-succeeded stages skip).
+  - Call clip.sh in manual-range mode — batch mode only makes sense with the
+    JSON-driven mode (clips.json from review.py).
+
+acceptance_criteria:
+  - "Given a folder with 2 synthetic raw videos and VIDEO_JUDGE_PROVIDER=mock, when bin/batch.sh <folder> runs, then both slugs get ingested/reviewed/clipped/reframed, and the summary line reports 2 ok, 0 failed."
+  - "Given the same folder is processed a second time without VIDEO_FORCE, when bin/batch.sh <folder> runs again, then every stage for both videos reports a resumability skip (verified via output containing 'skip' for each stage) rather than redoing work."
+  - "Given an empty folder, when bin/batch.sh <folder> runs, then it prints a 'no video files found' notice and exits 0."
+  - "Given a folder with one valid video and one 0-byte/corrupt .mp4 file, when bin/batch.sh <folder> runs, then the corrupt file's stages fail but the valid file still completes successfully, and the summary reports 1 ok, 1 failed."
+  - "Given a nonexistent directory argument, when bin/batch.sh <folder> runs, then it exits 1 with a clear 'no such directory' message before attempting any file discovery."
+
+steps:
+  - id: research
+    description: Confirm the exact JSON-driven invocation shape of clip.sh (clip.sh <video> <slug>, no start/end args) so batch.sh calls it correctly, and re-check ingest.sh's default-slug rule (basename without extension) for consistency.
+    agent: researcher
+  - id: implement
+    description: Write bin/batch.sh per the pipeline order and failure-handling rules above.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria using VIDEO_JUDGE_PROVIDER=mock and synthetic ffmpeg-generated raws (no real API key/network needed).
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm a single video's failure genuinely doesn't abort processing of subsequent videos, and that the exit-code/summary-line contract holds.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/lib/providers/mock.py
+      purpose: "Makes this story's tests possible without a real GEMINI_API_KEY or network access — set VIDEO_JUDGE_PROVIDER=mock for every batch.sh test."
+    - path: bin/clip.sh
+      purpose: "JSON-driven mode (clip.sh <video> <slug>, no start/end) is the invocation batch.sh uses — reframe.sh and caption.sh then operate on its output."
+
+files_to_modify:
+  - file: bin/batch.sh
+    change: "New file — the batch-mode tool."
+  - file: bin/video
+    change: "Add a `batch` subcommand routing to bin/batch.sh, consistent with every other stage being reachable through the CLI dispatcher."
+
+code_examples:
+  - title: "Non-fatal-by-design tools batch.sh can `|| true` (they already have legitimate skip/graceful exit codes)"
+    file: bin/transcribe.sh
+    snippet: |
+      if [ -z "$BIN" ]; then
+        echo "[transcribe] no whisper binary found — set VIDEO_WHISPER_BIN, or install whisper.cpp"
+        echo "[transcribe] (brew install whisper-cpp, or pip install openai-whisper)"
+        exit 0
+      fi
+
+design_decisions:
+  - decision: "batch.sh continues past a failing video rather than aborting the whole batch."
+    rationale: "This is the entire point of the ROADMAP ask ('unattended') — an operator queuing a folder overnight shouldn't lose all progress because one raw was corrupt or one API call failed."
+  - decision: "bin/video gets a new `batch` subcommand."
+    rationale: "Consistent with epic 1's cli-entrypoint story — every stage added since should stay reachable through the one CLI, not just as a standalone script."
+
+cross_cutting:
+  - concern: documentation
+    action: "Add a row to README.md's tool table, a 'Batch mode' section to docs/ARCHITECTURE.md, and mention `video batch` in the CLI section."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Batch mode' bullet to ✅ once all five acceptance criteria pass."
+  - concern: env-config-only
+    action: "batch.sh introduces no new env vars of its own — it composes the existing per-stage env vars (VIDEO_WORK, VIDEO_RAWS, VIDEO_JUDGE_PROVIDER, VIDEO_FORCE, etc.); document this composition, don't duplicate the var list."
+
+risks:
+  - severity: low
+    description: "A batch run over many real videos could run for a long time with no progress indication beyond per-stage stdout."
+    mitigation: "Out of scope for v1 (no progress bar/ETA) — the `[batch] === <slug> ===` per-video header line is the minimum unattended-run observability; a dashboard (separate ROADMAP item) could layer on top later."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Batch mode** — process a folder of raws unattended.

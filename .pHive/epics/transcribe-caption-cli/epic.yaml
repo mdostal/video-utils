@@ -6,6 +6,13 @@ description: >
   Directly serves the project's north_star success metric ("faster stop-to-post
   pipeline") — see .pHive/project-profile.yaml.
 target_codebase: .
+status: done
+completion_note: >
+  All 4 stories implemented and committed on feat/transcribe-caption-cli.
+  cli-entrypoint fully verified end-to-end. transcribe-audio and captions
+  are functionally complete but have environment-blocked happy-path gaps
+  (no whisper binary; ffmpeg build lacks libass) — see docs/ROADMAP.md's
+  🚧 markers and each story's risks: block for details.
 methodology: classic
 version_bump: minor
 sidecar_retention: committed

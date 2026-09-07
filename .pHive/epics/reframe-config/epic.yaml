@@ -1,0 +1,34 @@
+name: reframe-config
+title: "Config file support and vertical/square reframe"
+description: >
+  Closes two near-term docs/ROADMAP.md items: a video.toml/.videorc config-file
+  layer (falls back beneath env, env always wins) and 9:16/1:1 reframe exports
+  of cut clips. Second epic in the autonomous plan->execute->ship loop (see
+  .pHive/epics/transcribe-caption-cli/ for the first, v0.1.0).
+target_codebase: .
+status: done
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass: no separate research-brief.md/design-discussion.md this
+# time (established conventions from epic 1 reused directly) — this note stands
+# in for that ceremony. Same single-orchestrator caveat as epic 1: no
+# researcher/technical-writer/tpm fan-out, no grill loop.
+#
+# Scope note: dropped "Thumbnail generator" from this epic (it wants real LLM
+# picking via Gemini, comparable scope to review.py itself) to keep this epic
+# shippable in one pass. Still on the ROADMAP.md backlog for a future epic.
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: config-file
+    title: "Add .videorc/video.toml config-file fallback beneath env"
+    complexity: medium
+    depends_on: []
+  - id: reframe
+    title: "Add bin/reframe.sh (9:16 and 1:1 crops of cut clips)"
+    complexity: medium
+    depends_on: [config-file]

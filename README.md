@@ -41,6 +41,13 @@ bin/video ingest "$VIDEO_RAWS/my-video.mp4" my-video
 See `.env.example`. Key ones: `GEMINI_API_KEY` (or `GEMINI_SECRET_NAME`/`_PROJECT` to pull it from
 gcloud Secret Manager), `VIDEO_RAWS` (raw archive dir), `VIDEO_WORK` (where `work/` and `clips/` are written).
 
+### Config file (optional)
+Every tool also checks a `.videorc` (`KEY=VALUE` lines) or `video.toml` (a flat `[video]` table,
+`key = "value"` lines) in the current directory — or `$VIDEO_CONFIG` for an explicit path. **Env
+always wins**; the config file only fills in values you haven't exported. Keys are the exact env
+var name (e.g. `VIDEO_WHISPER_MODEL`, not a shortened alias). Don't commit your `.videorc`/`video.toml`
+to this repo — they're per-consuming-repo config, already `.gitignore`d.
+
 ## Design & roadmap
 - `docs/ARCHITECTURE.md` — the pipeline stages and file conventions.
 - `docs/ROADMAP.md` — the feature backlog (transcription, auto-captioning, platform publishers,

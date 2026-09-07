@@ -3,6 +3,7 @@
 # Usage: ingest.sh <video-path> [slug]
 # Config: VIDEO_WORK (output root; default current dir)
 set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/load-config.sh"
 BASE="${VIDEO_WORK:-$PWD}"
 MP4="${1:?usage: ingest.sh <video-path> [slug]}"
 [ -f "$MP4" ] || { echo "not found: $MP4"; exit 1; }

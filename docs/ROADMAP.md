@@ -11,6 +11,8 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - ✅ Env-driven config, media/secret git-ignored.
 - ✅ **A real CLI** — one `video` entrypoint wrapping all six stages
   (`video pull|ingest|transcribe|review|caption|clip`) with `--help`, instead of separate scripts.
+- ✅ **Config file** — every tool loads an optional `.videorc`/`video.toml` (via `bin/lib/videoconfig.py`)
+  for keys not already set in the environment; env always wins.
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -23,7 +25,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for
   TikTok/Reels/Shorts from a 16:9 master.
 - 🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."
-- 🔲 **Config file** — support a `video.toml`/`.videorc` in the consuming repo in addition to env.
 
 ## Integrations
 - 🔲 **Flayr publish hook** — POST finished `ready/<slug>/` assets + caption to the Flayr API for

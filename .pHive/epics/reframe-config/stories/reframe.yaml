@@ -1,0 +1,124 @@
+id: reframe
+epic: reframe-config
+title: "Add bin/reframe.sh (9:16 and 1:1 crops of cut clips)"
+status: pending
+complexity: medium
+methodology: classic
+depends_on: [config-file]
+
+description: |
+  Add bin/reframe.sh, exporting 9:16 (vertical) and 1:1 (square) center crops of
+  each cut clip in clips/<slug>/, for TikTok/Reels/Shorts. Per ROADMAP.md's
+  "(with a face/subject-aware center)" — face/subject-aware centering is
+  explicitly OUT of scope for this story (real scope: a face-detection model
+  dependency); v1 is a plain center crop. This is called out honestly rather
+  than silently dropped.
+
+  Pre-made decisions:
+  - Usage: reframe.sh <slug> — crops every clips/<slug>/*.mp4 (skips files
+    already ending in .captioned.mp4, .9x16.mp4, .1x1.mp4 to avoid re-cropping
+    already-derived outputs).
+  - Output: sibling files clips/<slug>/<name>.9x16.mp4 and clips/<slug>/<name>.1x1.mp4
+    — never overwrite the original, same sibling-file convention as caption.sh's
+    .captioned.mp4.
+  - Aspects are configurable: VIDEO_REFRAME_ASPECTS (env, default "9:16,1:1") —
+    a comma-separated list; each entry must be exactly "9:16" or "1:1" for v1
+    (validate and skip unknown entries with a warning, don't crash).
+  - Crop math: read source width/height via ffprobe (same tool already used by
+    ingest.sh), center-crop to the target aspect, no scaling beyond the crop
+    (preserves source resolution on the cropped axis).
+  - Loads config-file defaults first (depends_on: config-file) via the same
+    bin/lib/load-config.sh one-liner every other bash tool now uses.
+
+  DO NOT:
+  - Implement face/subject detection — plain center crop only for v1.
+  - Modify bin/caption.sh or bin/clip.sh.
+  - Overwrite the original clip file.
+
+acceptance_criteria:
+  - "Given clips/<slug>/01-test.mp4 exists (any resolution wider than tall, e.g. 320x240 or 16:9), when bin/reframe.sh <slug> runs with default aspects, then clips/<slug>/01-test.9x16.mp4 and clips/<slug>/01-test.1x1.mp4 are both written, the original clip is untouched, and the script exits 0."
+  - "Given VIDEO_REFRAME_ASPECTS=1:1 (only), when bin/reframe.sh <slug> runs, then only the .1x1.mp4 sibling is written, not .9x16.mp4."
+  - "Given clips/<slug>/ has no .mp4 files, when bin/reframe.sh <slug> runs, then it prints a 'no clips found' notice and exits 0 (not an error)."
+  - "Given clips/<slug>/ already contains a *.9x16.mp4 or *.1x1.mp4 file from a prior run, when bin/reframe.sh <slug> runs again, then those derived files are not re-processed as new source clips (no .9x16.9x16.mp4 double-derivation)."
+  - "Given VIDEO_REFRAME_ASPECTS=4:3 (an unsupported v1 aspect), when bin/reframe.sh <slug> runs, then it prints a warning naming the unsupported aspect and skips it, without crashing or affecting other valid aspects in the same list."
+
+steps:
+  - id: research
+    description: Confirm the exact ffmpeg crop filter syntax for a centered crop to a target aspect ratio given arbitrary source width/height (crop=w:h:x:y with x/y computed to center), and the ffprobe invocation to read width/height (bin/ingest.sh already uses ffprobe -show_format -show_streams as a precedent).
+    agent: researcher
+  - id: implement
+    description: Write bin/reframe.sh following clip.sh's BASE/VIDEO_WORK/ffmpeg-required-guard pattern, plus the config-file loader line from config-file story.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria against a short synthetic sample clip (ffmpeg lavfi color source, matching the pattern used to test caption.sh).
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm center-crop math is correct for both a landscape and a square-ish source, sibling-file naming avoids re-derivation loops, and caption.sh/clip.sh are untouched.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/clip.sh
+      purpose: "Reference for BASE/VIDEO_WORK/slug/ffmpeg-required-guard conventions."
+    - path: bin/caption.sh
+      purpose: "Reference for the sibling-output-file convention (never overwrite the original) and the skip-already-derived-files guard shape."
+
+files_to_modify:
+  - file: bin/reframe.sh
+    change: "New file — the reframe tool."
+  - file: .env.example
+    change: "Add VIDEO_REFRAME_ASPECTS with a one-line comment and default, in the existing style."
+
+code_examples:
+  - title: "ffmpeg-required guard + BASE/slug/CLIPS setup to mirror"
+    file: bin/clip.sh
+    snippet: |
+      set -euo pipefail
+      BASE="${VIDEO_WORK:-$PWD}"
+      SLUG="${2:?need a slug}"
+      OUT="$BASE/clips/$SLUG"; mkdir -p "$OUT"
+      command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg required (brew install ffmpeg)"; exit 1; }
+  - title: "Sibling-output-file + skip-already-derived convention to mirror"
+    file: bin/caption.sh
+    snippet: |
+      for f in "${files[@]}"; do
+        case "$f" in *.captioned.mp4) continue;; esac
+        name="$(basename "${f%.mp4}")"
+        out="$CLIPS/${name}.captioned.mp4"
+
+design_decisions:
+  - decision: "Plain center crop, no face/subject detection, for v1."
+    rationale: "Face-aware centering needs a real detection model dependency — disproportionate scope for this story; called out explicitly rather than silently simplified, per docs/ROADMAP.md's honest-status principle."
+  - decision: "Aspect list is configurable via VIDEO_REFRAME_ASPECTS, restricted to 9:16/1:1 for v1."
+    rationale: "Matches the exact two aspects the ROADMAP bullet names; a closed, validated set is safer than accepting arbitrary W:H strings that could produce a degenerate crop."
+
+cross_cutting:
+  - concern: env-config-only
+    action: "VIDEO_REFRAME_ASPECTS added to .env.example matching existing comment style; no hardcoded aspect list in bin/reframe.sh."
+  - concern: documentation
+    action: "Add a row to README.md's tool table and a reframe step to docs/ARCHITECTURE.md's flow diagram + folder contract section."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Vertical/short reframe' bullet to 🚧 (not ✅) even once acceptance criteria pass — face/subject-aware centering, part of the original bullet's wording, remains unbuilt; ✅ would overclaim."
+  - concern: no-secrets-no-media-in-git
+    action: "Derived .9x16.mp4/.1x1.mp4 files land under clips/<slug>/, already covered by the existing 'clips/' .gitignore line."
+
+risks:
+  - severity: low
+    description: "A source clip narrower than tall (already vertical) would produce a degenerate or upscaled crop for 9:16."
+    mitigation: "Compute crop dimensions from actual probed width/height rather than assuming 16:9 input; if the source is already narrower than the target aspect, crop height instead of width (letterbox-safe center crop either direction)."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Vertical/short reframe** — export 9:16 and 1:1 crops (with a face/subject-aware center) for
+      TikTok/Reels/Shorts from a 16:9 master.

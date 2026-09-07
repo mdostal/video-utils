@@ -44,6 +44,11 @@ All tools are stateless and env-configured (`.env.example`): `GEMINI_API_KEY` (o
 `VIDEO_RAWS`, `VIDEO_WORK`, `VIDEO_MODEL`, `VIDEO_REVIEW_PROMPT`, `VIDEO_WHISPER_BIN`,
 `VIDEO_WHISPER_MODEL`. No tool hardcodes a path or secret.
 
+Each tool also loads an optional `.videorc`/`video.toml` config-file layer (`bin/lib/videoconfig.py`,
+sourced via `bin/lib/load-config.sh` in bash tools, imported directly in `review.py`) for any of the
+above keys not already set in the environment — env always wins. See README.md's "Config file"
+section.
+
 ## The CLI (bin/video)
 A pure `exec`-based dispatcher: `video <subcommand> [args...]` routes to the matching script in
 `bin/` and passes `"$@"` through untouched — it never re-parses or reimplements a subcommand's own

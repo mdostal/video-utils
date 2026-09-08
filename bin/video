@@ -16,6 +16,7 @@ subcommands:
   caption     <slug>                          .srt from transcript; optional burn-in into clips
   clip        <video> <slug> [start end name] Cut shorts from clips.json or a manual range
   reframe     <slug>                          9:16 and 1:1 center-crop exports of cut clips
+  thumbnail   <video> [slug]                  Candidate frames + optional LLM-picked hook frame
   batch       [raws-dir]                      Run the full pipeline unattended over a raws folder
 
   video --help | -h | (no args)               Show this help
@@ -41,6 +42,8 @@ case "$1" in
     shift; exec "$HERE/clip.sh" "$@" ;;
   reframe)
     shift; exec "$HERE/reframe.sh" "$@" ;;
+  thumbnail)
+    shift; exec "$HERE/thumbnail.py" "$@" ;;
   batch)
     shift; exec "$HERE/batch.sh" "$@" ;;
   *)

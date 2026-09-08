@@ -1,0 +1,39 @@
+name: thumbnail-generator
+title: "Thumbnail candidate extraction + LLM-picked hook frame"
+description: >
+  Closes the twice-deferred Near-term docs/ROADMAP.md item. bin/thumbnail.py
+  always extracts N evenly-spaced candidate frames via ffmpeg (free, local,
+  deterministic), then optionally asks the resolved judge provider
+  (bin/lib/providers/, VIDEO_JUDGE_PROVIDER) to pick the best "hook frame" —
+  extending the provider interface with a second, optional capability
+  (pick_frame) alongside the existing review(). Gracefully degrades (frames
+  still extracted) if the provider has no pick_frame or picking fails/errors.
+  Fifth epic in the autonomous plan->execute->ship loop (epics 1-4 shipped
+  as v0.1.0-v0.4.0).
+target_codebase: .
+status: done
+completion_note: >
+  Story implemented and verified (all 5 acceptance criteria pass, including
+  the no-key graceful-degradation path). Extended tests/smoke.sh with 3 new
+  assertions. Left bin/batch.sh's pipeline unchanged (does not call
+  thumbnail.py) — that's a natural small follow-up, not required by this
+  epic's scope.
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass, same as epics 2-4. Solo-orchestrator, no teammate
+# fan-out/grill loop (no hive/lib runtime here).
+#
+# Scope note: Integrations section is NOT in this epic (external
+# API/credential decisions pending the operator) — after this epic and
+# Dashboard, only Integrations remains, and the loop stops there.
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: thumbnail-generator
+    title: "Add bin/thumbnail.py: candidate frames + optional LLM pick"
+    complexity: high
+    depends_on: []

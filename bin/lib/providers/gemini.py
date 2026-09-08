@@ -9,7 +9,7 @@ Config (env):
 
 Flow: upload to the Gemini File API -> poll ACTIVE -> generateContent. No secrets are printed.
 """
-import sys, os, json, time, subprocess, tempfile
+import sys, os, json, re, time, base64, subprocess, tempfile
 
 API = "https://generativelanguage.googleapis.com"
 MODEL = os.environ.get("VIDEO_MODEL", "gemini-2.5-flash")
@@ -98,3 +98,29 @@ def review(video_path, transcript, prompt):
     _wait_active(key, name)
     print("[gemini] generating review ...")
     return _generate(key, uri, prompt, transcript)
+
+
+def pick_frame(image_paths, prompt):
+    """Ask Gemini to pick the best frame. Returns a 1-based index, clamped
+    to a valid range; never raises for an unparseable/missing response
+    (only _get_key()'s missing-key case is fatal — callers must expect that
+    and treat picking as best-effort, per base.py's contract)."""
+    key = _get_key()
+    parts = []
+    for p in image_paths:
+        b64 = base64.b64encode(open(p, "rb").read()).decode()
+        parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
+    parts.append({"text": prompt})
+    body = {"contents": [{"parts": parts}]}
+    bf = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+    json.dump(body, bf); bf.close()
+    r = _sh(["curl", "-s", "-X", "POST",
+             f"{API}/v1beta/models/{MODEL}:generateContent?key={key}",
+             "-H", "Content-Type: application/json", "-d", f"@{bf.name}"])
+    d = json.loads(r.stdout)
+    if "candidates" not in d:
+        sys.exit(f"Gemini error: {json.dumps(d)[:400]}")
+    text = d["candidates"][0]["content"]["parts"][0]["text"]
+    m = re.search(r"\d+", text)
+    idx = int(m.group()) if m else 1
+    return max(1, min(idx, len(image_paths)))

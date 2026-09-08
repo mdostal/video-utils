@@ -27,6 +27,9 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   second (OpenAI/Claude/etc.) would need its own API key decision.
 - ✅ **Batch mode** — `bin/batch.sh` runs the full pipeline unattended over every raw in a folder,
   continuing past a failing video rather than aborting the batch; a summary prints at the end.
+- ✅ **Dashboard** — `bin/dashboard.py`, a stdlib-only local web view (`127.0.0.1` only, no auth) of
+  `work/`/`clips/` — slug index, per-slug review/clips/thumbnail view, path-traversal-guarded media
+  serving. `review.md` is shown as escaped plain text, not rendered Markdown (v1 simplification).
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -51,9 +54,6 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   document the manual upload path.
 - 🔲 **Platform publishers** — native upload to LinkedIn / YouTube / etc. via their APIs.
 - 🔲 **Backup adapter** — push raws to a backup target (Google Drive, S3, rclone) since media isn't in git.
-
-## Robustness / quality
-- 🔲 **Dashboard** — a small local web view of `work/`/`clips/` with the reviews and clip previews.
 
 ## Non-goals (for now)
 - Not a video *editor* (no timeline UI) — it orchestrates capture→judge→clip→handoff.

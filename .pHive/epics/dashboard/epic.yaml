@@ -1,0 +1,36 @@
+name: dashboard
+title: "Local web dashboard for reviews and clips"
+description: >
+  Closes the last Robustness/quality docs/ROADMAP.md item. bin/dashboard.py
+  is a stdlib-only (http.server) local web view: an index listing every
+  slug under work/, a per-slug detail page (rendered review.md, clips.json
+  listing, thumbnail if present, links to clip files), and a media route
+  serving those files to the browser — path-traversal-guarded, bound to
+  127.0.0.1 only, no auth (a local dev tool). Sixth and LAST epic in this
+  autonomous plan->execute->ship run (epics 1-5 shipped as v0.1.0-v0.5.0).
+  After this ships, only the Integrations section remains, and the
+  autonomous loop stops — Integrations needs the operator's own
+  external API/credential decisions before it can even be planned.
+target_codebase: .
+status: done
+completion_note: >
+  Story implemented and fully verified (all 5 acceptance criteria pass,
+  including two independent path-traversal shapes beyond the one in the
+  story's own AC5). This is the last epic of the autonomous run — only
+  Integrations remains on the ROADMAP backlog, and it needs the operator's
+  own external API/credential decisions before it can even be planned.
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass, same as epics 2-5. Solo-orchestrator, no teammate
+# fan-out/grill loop (no hive/lib runtime here).
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: dashboard
+    title: "Add bin/dashboard.py: index + per-slug view + media serving"
+    complexity: high
+    depends_on: []

@@ -22,6 +22,7 @@ Bring your own content repo; this is just the tools.
 | `bin/reframe.sh <slug>` | 9:16 and 1:1 center-crop exports of cut clips | ffmpeg/ffprobe |
 | `bin/thumbnail.py <video> [slug]` | Candidate frames + optional LLM-picked hook frame | ffmpeg/ffprobe (+ Gemini key for picking) |
 | `bin/batch.sh [raws-dir]` | Run the full pipeline unattended over every raw in a folder | (same as the stages it runs) |
+| `bin/dashboard.py [port]` | Local web view of `work/`/`clips/` — reviews, clips, thumbnails | — (binds to `127.0.0.1` only) |
 
 ## Quick start
 ```bash

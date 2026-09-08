@@ -18,6 +18,7 @@ subcommands:
   reframe     <slug>                          9:16 and 1:1 center-crop exports of cut clips
   thumbnail   <video> [slug]                  Candidate frames + optional LLM-picked hook frame
   batch       [raws-dir]                      Run the full pipeline unattended over a raws folder
+  dashboard   [port]                          Local web view of work/clips (127.0.0.1 only)
 
   video --help | -h | (no args)               Show this help
 EOF
@@ -46,6 +47,8 @@ case "$1" in
     shift; exec "$HERE/thumbnail.py" "$@" ;;
   batch)
     shift; exec "$HERE/batch.sh" "$@" ;;
+  dashboard)
+    shift; exec "$HERE/dashboard.py" "$@" ;;
   *)
     echo "video: unknown subcommand '$1'" >&2
     usage >&2

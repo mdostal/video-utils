@@ -39,7 +39,10 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - 🚧 **Vertical/short reframe** — `bin/reframe.sh` exports 9:16/1:1 crops of cut clips, verified
   end-to-end; the face/subject-aware center from the original ask is NOT built (plain center crop
   only) — would need a real detection-model dependency.
-- 🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."
+- 🚧 **Thumbnail generator** — `bin/thumbnail.py` extracts candidate frames via ffmpeg (verified) and
+  can ask the judge provider to pick the best one via a new `pick_frame` provider capability
+  (verified via the mock provider and the no-key graceful-degradation path); the real Gemini pick is
+  unverified end-to-end (no key in this environment).
 
 ## Integrations
 - 🔲 **Flayr publish hook** — POST finished `ready/<slug>/` assets + caption to the Flayr API for

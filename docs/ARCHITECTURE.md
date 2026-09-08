@@ -105,6 +105,16 @@ for one video does not abort the batch; a `$ok ok, $failed failed, $total total`
 the end, and `batch.sh` exits non-zero only if any video had a failed stage. Resumability (above)
 makes re-running `batch.sh` over the same folder cheap — already-completed stages skip.
 
+## Dashboard (dashboard.py)
+A stdlib-only (`http.server`) local web view: `GET /` lists every slug under `work/`; `GET
+/slug/<slug>` renders that slug's `review.md` (escaped plain text — not rendered Markdown, a
+deliberate v1 simplification), lists `clips.json`'s suggestions, and links to files under
+`clips/<slug>/`; `GET /media/{work,clips}/<slug>/<file>` serves those files (so a browser can play a
+clip or view a thumbnail). Read-only, no authentication, binds to `127.0.0.1` only — a local dev
+convenience tool, not a deployed service. The media route resolves every path against its base
+directory and rejects anything that would escape it (path-traversal guard) rather than trusting the
+URL.
+
 ## Judge providers (bin/lib/providers/)
 `review.py` is a thin, provider-agnostic CLI: it resolves the transcript (if any) and the review
 prompt (`VIDEO_REVIEW_PROMPT` or the built-in default), then delegates to a provider module selected

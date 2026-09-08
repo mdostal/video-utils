@@ -3,6 +3,7 @@
 # Covers: ingest.sh, review.py (via VIDEO_JUDGE_PROVIDER=mock, no real API
 # call), caption.sh, clip.sh, reframe.sh, thumbnail.py (extraction always,
 # mock-provider picking, and graceful degradation with no key), batch.sh,
+# dashboard.py (index/slug/media routes + path-traversal guard),
 # transcribe.sh's missing-binary path, and resumability (VIDEO_FORCE=1) for
 # each.
 # NOT covered: review.py's/thumbnail.py's real Gemini calls (need a paid
@@ -13,7 +14,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="$HERE/../bin"
 
 TMP="$(mktemp -d)"
-cleanup() { rm -rf "$TMP"; }
+DASH_PID=""
+cleanup() {
+  [ -n "$DASH_PID" ] && kill "$DASH_PID" 2>/dev/null || true
+  rm -rf "$TMP"
+}
 trap cleanup EXIT
 
 export VIDEO_WORK="$TMP"
@@ -179,5 +184,44 @@ out="$(VIDEO_JUDGE_PROVIDER=mock "$BIN/batch.sh" "$BATCH_RAWS" 2>&1)"
 echo "$out" | grep -qi "skip" || fail "batch.sh re-run did not show resumability skips"
 echo "$out" | grep -q "1 ok, 0 failed, 1 total" || fail "batch.sh summary line was wrong on re-run"
 pass "batch.sh re-run is resumable (skips completed stages)"
+
+# --- dashboard.py: index/slug/media routes + path-traversal guard ---
+DASH_PORT=18999
+"$BIN/dashboard.py" "$DASH_PORT" >/dev/null 2>&1 &
+DASH_PID=$!
+for _ in $(seq 1 30); do
+  curl -s -o /dev/null "http://127.0.0.1:$DASH_PORT/" && break
+  sleep 0.2
+done
+
+code=$(curl -s -o /tmp/smoke-dash-index.$$.html -w "%{http_code}" "http://127.0.0.1:$DASH_PORT/")
+[ "$code" = "200" ] || fail "dashboard index returned $code"
+grep -q "demo" /tmp/smoke-dash-index.$$.html || fail "dashboard index did not list the demo slug"
+rm -f /tmp/smoke-dash-index.$$.html
+pass "dashboard.py index lists the demo slug"
+
+code=$(curl -s -o /tmp/smoke-dash-slug.$$.html -w "%{http_code}" "http://127.0.0.1:$DASH_PORT/slug/demo")
+[ "$code" = "200" ] || fail "dashboard slug view returned $code"
+grep -qi "review" /tmp/smoke-dash-slug.$$.html || fail "dashboard slug view missing review content"
+rm -f /tmp/smoke-dash-slug.$$.html
+pass "dashboard.py slug view renders review + clips"
+
+code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$DASH_PORT/slug/does-not-exist")
+[ "$code" = "404" ] || fail "dashboard unknown slug should be 404, got $code"
+pass "dashboard.py 404s an unknown slug"
+
+code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$DASH_PORT/media/work/demo/thumbnail.jpg")
+[ "$code" = "200" ] || fail "dashboard media route returned $code"
+pass "dashboard.py serves a real media file"
+
+code=$(curl -s -o /tmp/smoke-dash-trav.$$.out -w "%{http_code}" "http://127.0.0.1:$DASH_PORT/media/work/demo/../../../../../../etc/passwd")
+grep -q "root:" /tmp/smoke-dash-trav.$$.out && fail "dashboard path-traversal guard leaked /etc/passwd"
+[ "$code" = "404" ] || fail "dashboard path-traversal request should 404, got $code"
+rm -f /tmp/smoke-dash-trav.$$.out
+pass "dashboard.py blocks a path-traversal request"
+
+kill "$DASH_PID" 2>/dev/null || true
+wait "$DASH_PID" 2>/dev/null || true
+DASH_PID=""
 
 echo "[smoke] ALL PASS"

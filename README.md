@@ -23,6 +23,7 @@ Bring your own content repo; this is just the tools.
 | `bin/thumbnail.py <video> [slug]` | Candidate frames + optional LLM-picked hook frame | ffmpeg/ffprobe (+ Gemini key for picking) |
 | `bin/batch.sh [raws-dir]` | Run the full pipeline unattended over every raw in a folder | (same as the stages it runs) |
 | `bin/dashboard.py [port]` | Local web view of `work/`/`clips/` — reviews, clips, thumbnails | — (binds to `127.0.0.1` only) |
+| `bin/backup.sh [raws-dir]` | Push raws to a backup target (Drive, S3, ...) | rclone (configured via `rclone config`) |
 
 ## Quick start
 ```bash

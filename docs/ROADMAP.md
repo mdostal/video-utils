@@ -30,6 +30,9 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 - ✅ **Dashboard** — `bin/dashboard.py`, a stdlib-only local web view (`127.0.0.1` only, no auth) of
   `work/`/`clips/` — slug index, per-slug review/clips/thumbnail view, path-traversal-guarded media
   serving. `review.md` is shown as escaped plain text, not rendered Markdown (v1 simplification).
+- ✅ **Backup adapter** — `bin/backup.sh` pushes `$VIDEO_RAWS` to any rclone-supported destination
+  (Google Drive, S3, plain paths, etc.) via `rclone copy`; no rclone or no `VIDEO_BACKUP_REMOTE` is
+  non-fatal, no backend credentials touch this repo (rclone's own config holds those).
 
 ## Near-term
 - 🚧 **Transcription** — `bin/transcribe.sh` + judge integration are built (local `whisper`/whisper.cpp
@@ -48,12 +51,16 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
   unverified end-to-end (no key in this environment).
 
 ## Integrations
+All four items below need an operator decision (which service, which API key/credential) before any
+code can be written — none are silently buildable the way Backup adapter turned out to be.
 - 🔲 **Flayr publish hook** — POST finished `ready/<slug>/` assets + caption to the Flayr API for
-  cross-post scheduling.
-- 🔲 **Opus Clip hook** — if/when a public API exists, hand off the raw for auto-shorts; until then,
-  document the manual upload path.
-- 🔲 **Platform publishers** — native upload to LinkedIn / YouTube / etc. via their APIs.
-- 🔲 **Backup adapter** — push raws to a backup target (Google Drive, S3, rclone) since media isn't in git.
+  cross-post scheduling. Operator follow-up in progress (as of 2026-09-08).
+- 🔲 **Opus Clip hook** — a public API now exists (`developer.opus.pro`, v2, API-key auth, checked
+  2026-09-08) — this bullet is no longer gated on "if/when a public API exists". Needs an
+  `OPUS_API_KEY` decision from the operator before building the integration; the manual-upload
+  path remains the fallback until then.
+- 🔲 **Platform publishers** — native upload to LinkedIn / YouTube / etc. via their APIs. Needs a
+  per-platform OAuth app + credentials decision.
 
 ## Non-goals (for now)
 - Not a video *editor* (no timeline UI) — it orchestrates capture→judge→clip→handoff.

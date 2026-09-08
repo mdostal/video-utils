@@ -1,0 +1,33 @@
+name: backup-adapter
+title: "Generic backup adapter for raws (rclone-based)"
+description: >
+  Closes the one Integrations docs/ROADMAP.md item buildable without an
+  operator credential decision. bin/backup.sh pushes $VIDEO_RAWS to a
+  configured rclone remote (VIDEO_BACKUP_REMOTE) — Google Drive, S3, or
+  anything else rclone supports (including a plain local/network path).
+  Follows the same optional-external-tool graceful-degradation pattern as
+  whisper.cpp (transcribe.sh) and gcloud (review.py's gemini provider): no
+  rclone installed, or no remote configured, is non-fatal. Session resumed
+  after a machine restart; this epic picks up where the prior autonomous
+  run left off. Flayr (operator following up separately today), the Opus
+  Clip API integration (a real public API now exists per a quick check, but
+  it needs its own API key — an operator decision, not silently buildable),
+  and platform publishers (per-platform OAuth/API decisions) are explicitly
+  OUT of scope and still need the operator.
+target_codebase: .
+status: done
+methodology: classic
+version_bump: minor
+sidecar_retention: transient
+# Lean planning pass, same as epics 2-6. Solo-orchestrator, no teammate
+# fan-out/grill loop (no hive/lib runtime here).
+
+git_flow:
+  base_branch: dev
+  branch_strategy: per-epic
+
+stories:
+  - id: backup-adapter
+    title: "Add bin/backup.sh (rclone-based, optional, graceful)"
+    complexity: medium
+    depends_on: []

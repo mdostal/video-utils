@@ -105,6 +105,14 @@ for one video does not abort the batch; a `$ok ok, $failed failed, $total total`
 the end, and `batch.sh` exits non-zero only if any video had a failed stage. Resumability (above)
 makes re-running `batch.sh` over the same folder cheap — already-completed stages skip.
 
+## Backup (backup.sh)
+`backup.sh [raws-dir]` pushes `$VIDEO_RAWS` to a backend-agnostic destination via `rclone copy` —
+one optional external tool covers Google Drive, S3, and everything else rclone supports, rather than
+a bespoke client per backend. `VIDEO_BACKUP_REMOTE` unset, or no `rclone` on `$PATH`, are both
+non-fatal (same graceful-degradation pattern as `transcribe.sh`'s whisper binary). No backend
+credentials are read or stored by this repo — they live entirely in rclone's own `rclone config`.
+`rclone copy` is incremental by construction, so no custom resumability logic is needed on top of it.
+
 ## Dashboard (dashboard.py)
 A stdlib-only (`http.server`) local web view: `GET /` lists every slug under `work/`; `GET
 /slug/<slug>` renders that slug's `review.md` (escaped plain text — not rendered Markdown, a

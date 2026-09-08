@@ -1,0 +1,124 @@
+id: backup-adapter
+epic: backup-adapter
+title: "Add bin/backup.sh (rclone-based, optional, graceful)"
+status: done
+complexity: medium
+methodology: classic
+depends_on: []
+
+description: |
+  bin/backup.sh [raws-dir] (default $VIDEO_RAWS, then ./raws) pushes that
+  directory to a configured rclone remote via `rclone copy`, since masters
+  aren't in git (AGENTS.md: "No secrets, no media in git"). rclone itself
+  supports dozens of backends (Google Drive, S3, and many others) plus plain
+  filesystem/network paths behind one uniform interface — this tool doesn't
+  need to know which backend the operator eventually configures; it only
+  needs an rclone remote string.
+
+  Pre-made decisions:
+  - VIDEO_BACKUP_REMOTE (env) — an rclone destination string
+    (`remote:path`, e.g. `gdrive:video-utils-backup`, `s3:my-bucket/raws`,
+    or a plain local/network path for testing). Unset is non-fatal: print
+    a clear "not configured" message naming the env var and exit 0 — same
+    pattern as transcribe.sh's missing-whisper-binary path.
+  - rclone not installed: same non-fatal pattern, install hint printed
+    (`brew install rclone`), exit 0.
+  - `rclone copy <raws-dir> <remote>` is incremental by construction (rclone
+    only transfers new/changed files) — no custom resumability/VIDEO_FORCE
+    logic is needed on top of it; this is called out explicitly rather than
+    reimplemented.
+  - Nonexistent raws-dir argument: exit 1 with a clear message (matches
+    batch.sh's precedent for a bad directory argument).
+  - No secrets are read or needed by this script itself — rclone's own
+    config (`rclone config`) holds any backend credentials, entirely outside
+    this repo/tool's concern, consistent with "no secrets in git."
+
+  DO NOT:
+  - Hardcode a specific backend (Drive/S3/etc.) — the whole point is rclone's
+    uniform interface; this tool stays backend-agnostic.
+  - Add rclone as a hard dependency anywhere else (ingest.sh, batch.sh,
+    etc.) — it's a new, entirely optional, standalone tool.
+  - Prompt for or store any backend credentials — that's rclone's own config
+    file, never this repo.
+
+acceptance_criteria:
+  - "Given VIDEO_BACKUP_REMOTE is unset, when bin/backup.sh <raws-dir> runs, then it prints a message naming VIDEO_BACKUP_REMOTE and exits 0 without invoking rclone."
+  - "Given VIDEO_BACKUP_REMOTE is set but rclone is not on PATH, when bin/backup.sh <raws-dir> runs, then it prints an install hint and exits 0."
+  - "Given a nonexistent raws-dir argument, when bin/backup.sh <bogus-dir> runs, then it exits 1 with a clear message, before checking VIDEO_BACKUP_REMOTE or rclone."
+  - "Given VIDEO_BACKUP_REMOTE points at a real (local-path) rclone destination and a raws-dir with files, when bin/backup.sh <raws-dir> runs, then every file is copied to the destination and the script exits 0."
+  - "Given the same setup, when bin/backup.sh runs a second time with no changes to the source, then rclone's own incremental behavior skips re-copying unchanged files (verified via rclone's own summary output, not custom logic in this script)."
+
+steps:
+  - id: research
+    description: Confirm rclone's `copy` subcommand semantics (incremental by default, treats a plain filesystem path as a valid remote) and its `--stats`/summary output format for verifying AC5 without parsing fragile output.
+    agent: researcher
+  - id: implement
+    description: Write bin/backup.sh following ingest.sh/batch.sh's BASE/VIDEO_RAWS + graceful-optional-tool conventions.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria — the two graceful-degradation paths, the bad-directory path, and (since rclone happens to be installed in this environment) the real copy + incremental-rerun paths against a local-path pseudo-remote.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm no credentials/backend-specific logic leaked into the script, and that VIDEO_BACKUP_REMOTE-unset/rclone-missing are both genuinely non-fatal.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [bash]
+  key_files:
+    - path: bin/transcribe.sh
+      purpose: "Direct precedent for the optional-external-tool, non-fatal-when-missing pattern (VIDEO_WHISPER_BIN / whisper.cpp) this story mirrors for rclone."
+    - path: bin/batch.sh
+      purpose: "Precedent for the nonexistent-directory-argument error path."
+
+files_to_modify:
+  - file: bin/backup.sh
+    change: "New file — the backup adapter."
+  - file: bin/video
+    change: "Add a `backup` subcommand."
+  - file: .env.example
+    change: "Document VIDEO_BACKUP_REMOTE."
+
+code_examples:
+  - title: "Non-fatal optional-external-tool pattern to mirror"
+    file: bin/transcribe.sh
+    snippet: |
+      if [ -z "$BIN" ]; then
+        echo "[transcribe] no whisper binary found — set VIDEO_WHISPER_BIN, or install whisper.cpp"
+        echo "[transcribe] (brew install whisper-cpp, or pip install openai-whisper)"
+        exit 0
+      fi
+
+design_decisions:
+  - decision: "rclone as the one integration point, not a bespoke Drive/S3 client per backend."
+    rationale: "Matches the ROADMAP bullet's own framing ('Google Drive, S3, rclone') — rclone already speaks to all of those and dozens more behind one CLI, so this tool needs exactly one new optional dependency instead of one per backend, and never touches backend-specific credentials itself."
+  - decision: "No custom incremental/resumability logic — rely on rclone copy's own behavior."
+    rationale: "Reimplementing what rclone already does well would be pure duplication; AC5 exists to prove the reliance is justified, not to test bespoke logic."
+
+cross_cutting:
+  - concern: documentation
+    action: "Add a 'Backup adapter' section to docs/ARCHITECTURE.md, a row to README.md's tool table, and document VIDEO_BACKUP_REMOTE in .env.example. Also correct docs/ROADMAP.md's Opus Clip bullet — a public API now exists (checked via web search), so 'if/when a public API exists' is stale; that item still needs the operator's own API key decision and stays 🔲, but the wording should reflect current reality."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Backup adapter' bullet to ✅ once all five acceptance criteria pass."
+  - concern: env-config-only
+    action: "VIDEO_BACKUP_REMOTE added to .env.example; no hardcoded remote/backend in bin/backup.sh."
+  - concern: no-secrets-no-media-in-git
+    action: "This story is the concern in tool form — no backend credentials are read, stored, or logged; rclone's own config file (outside this repo) is the only place they live."
+
+risks:
+  - severity: low
+    description: "A real Drive/S3 remote can't be exercised in this environment (no operator-configured rclone remote) — only a local-path pseudo-remote is tested."
+    mitigation: "rclone's `copy` command treats every destination uniformly regardless of backend, so a local-path test genuinely exercises the same code path bin/backup.sh would use for any real remote; documented as the one environment caveat, not silently assumed away."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Backup adapter** — push raws to a backup target (Google Drive, S3, rclone) since media isn't in git.

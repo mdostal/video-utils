@@ -3,9 +3,10 @@
 # Covers: ingest.sh, review.py (via VIDEO_JUDGE_PROVIDER=mock, no real API
 # call), caption.sh, clip.sh, reframe.sh, thumbnail.py (extraction always,
 # mock-provider picking, and graceful degradation with no key), batch.sh,
-# dashboard.py (index/slug/media routes + path-traversal guard),
-# transcribe.sh's missing-binary path, and resumability (VIDEO_FORCE=1) for
-# each.
+# dashboard.py (index/slug/media routes + path-traversal guard), backup.sh
+# (real rclone copy if rclone is installed, else its graceful-degradation
+# path), transcribe.sh's missing-binary path, and resumability
+# (VIDEO_FORCE=1) for each.
 # NOT covered: review.py's/thumbnail.py's real Gemini calls (need a paid
 # GEMINI_API_KEY) and transcribe.sh's real-transcription happy path (needs a
 # real whisper binary).
@@ -223,5 +224,30 @@ pass "dashboard.py blocks a path-traversal request"
 kill "$DASH_PID" 2>/dev/null || true
 wait "$DASH_PID" 2>/dev/null || true
 DASH_PID=""
+
+# --- backup.sh: rclone-based, optional, graceful ---
+BACKUP_RAWS="$TMP/backup-raws"
+mkdir -p "$BACKUP_RAWS"
+echo "fake raw" > "$BACKUP_RAWS/vid1.mp4"
+
+rc=0; "$BIN/backup.sh" /no/such/raws-dir >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "backup.sh should exit non-zero for a nonexistent directory"
+pass "backup.sh fails on a nonexistent directory"
+
+out="$(env -u VIDEO_BACKUP_REMOTE "$BIN/backup.sh" "$BACKUP_RAWS")"
+echo "$out" | grep -qi "VIDEO_BACKUP_REMOTE" || fail "backup.sh did not report the unset remote clearly"
+pass "backup.sh is a no-op (exit 0) when VIDEO_BACKUP_REMOTE is unset"
+
+if command -v rclone >/dev/null 2>&1; then
+  BACKUP_DEST="$TMP/backup-dest"
+  mkdir -p "$BACKUP_DEST"
+  VIDEO_BACKUP_REMOTE="$BACKUP_DEST" "$BIN/backup.sh" "$BACKUP_RAWS" >/dev/null
+  assert_file "$BACKUP_DEST/vid1.mp4" "backup.sh rclone copy"
+  pass "backup.sh copied raws to a local-path pseudo-remote via rclone"
+else
+  out="$(VIDEO_BACKUP_REMOTE="$TMP/backup-dest" "$BIN/backup.sh" "$BACKUP_RAWS")"
+  echo "$out" | grep -qi "rclone" || fail "backup.sh did not report missing rclone clearly"
+  pass "backup.sh degrades gracefully when rclone is not installed"
+fi
 
 echo "[smoke] ALL PASS"

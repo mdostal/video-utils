@@ -21,4 +21,21 @@ review-domain inputs above and never reaches into provider internals.
 Selection: VIDEO_JUDGE_PROVIDER (env, default "gemini") names the module to
 import from this package. See gemini.py for the real implementation and
 mock.py for a network-free provider used in tests and local iteration.
+
+A provider MAY additionally expose a second, OPTIONAL capability:
+
+    def pick_frame(image_paths: list[str], prompt: str) -> int
+
+        image_paths: local paths to candidate thumbnail frame images (JPEG).
+        prompt:      the fully-resolved instruction text for picking one.
+
+        Returns a 1-based index into image_paths naming the chosen frame,
+        clamped/defaulted to 1 by the provider if its own response can't be
+        parsed (never raises for that reason). review() and pick_frame() are
+        independent capabilities — a provider may implement either, both, or
+        neither; callers (e.g. bin/thumbnail.py) MUST check
+        `hasattr(provider, "pick_frame")` before calling it and must treat
+        any exception it raises (including a fatal key-lookup SystemExit) as
+        a soft failure — picking is always a best-effort enhancement, never
+        a requirement for the caller's other work to have succeeded.
 """

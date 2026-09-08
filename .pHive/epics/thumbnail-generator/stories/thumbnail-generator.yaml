@@ -1,0 +1,154 @@
+id: thumbnail-generator
+epic: thumbnail-generator
+title: "Add bin/thumbnail.py: candidate frames + optional LLM pick"
+status: done
+complexity: high
+methodology: classic
+depends_on: []
+
+description: |
+  bin/thumbnail.py <video> [slug]: always extracts VIDEO_THUMBNAIL_COUNT
+  (default 6) evenly-spaced candidate frames via ffmpeg into
+  work/<slug>/thumbnails/frame-NN.jpg (free, local, deterministic — the
+  reliable core of the ROADMAP ask). Then, if the resolved judge provider
+  (VIDEO_JUDGE_PROVIDER, same var review.py uses) implements a NEW optional
+  capability `pick_frame(image_paths, prompt) -> int`, asks it to pick the
+  best "hook frame" (1-based frame number) and writes work/<slug>/thumbnail.jpg
+  (a copy of the chosen frame) + work/<slug>/thumbnail-pick.md (which frame,
+  which provider). Picking is best-effort: no pick_frame on the provider, a
+  missing key, or any error during picking degrades gracefully — the
+  extracted frames remain for manual selection, and the script still exits 0.
+
+  Pre-made decisions:
+  - Extraction: read duration via ffprobe (same tool ingest.sh already uses),
+    take N frames at evenly-spaced midpoints (`t = duration * (i+0.5) / N`)
+    via N separate `ffmpeg -ss <t> -i <video> -frames:v 1 -q:v 2 <out>`
+    calls — matches this codebase's plain-subprocess-calls style (no complex
+    filtergraph select expressions).
+  - `pick_frame` is a NEW, OPTIONAL provider capability (base.py documents it
+    alongside the existing `review`) — a provider may implement `review`
+    only, `pick_frame` only, or both. thumbnail.py checks
+    `hasattr(provider, "pick_frame")` before attempting to use it.
+  - `pick_frame(image_paths: list[str], prompt: str) -> int` returns a
+    1-based frame number in `[1, len(image_paths)]`. The provider is
+    responsible for clamping/defaulting an unparseable response to `1`
+    rather than raising — but thumbnail.py's call site ALSO wraps the call in
+    `try/except (Exception, SystemExit)` as defense-in-depth, since
+    gemini.py's existing `_get_key()` calls `sys.exit()` on a missing key
+    (intentional fatal behavior for `review()`, but picking must never abort
+    frame extraction's already-saved work).
+  - `bin/lib/providers/gemini.py`'s `pick_frame` sends all candidate frames
+    as inline base64 `image/jpeg` parts (small files — no File API upload
+    needed, unlike video review) plus a text prompt asking for ONLY the
+    frame number; parses the first integer out of the response text.
+  - `bin/lib/providers/mock.py`'s `pick_frame` always returns `1` (the first
+    frame) — deterministic, no network, matching the mock provider's
+    existing testing role.
+  - Resumability (independent per stage, mirroring caption.sh's srt-vs-burn-in
+    split): extraction skips if `thumbnails/` already has files; picking
+    skips if `thumbnail.jpg` already exists. `VIDEO_FORCE=1` redoes either.
+
+  DO NOT:
+  - Make picking fatal — a missing key, network error, or unparseable
+    response must never make bin/thumbnail.py exit non-zero when frame
+    extraction itself succeeded.
+  - Add a real second provider or a face/subject-detection dependency —
+    picking is LLM-based only, reusing the existing provider abstraction.
+  - Change `review()`'s signature or behavior — `pick_frame` is purely
+    additive to the provider interface.
+
+acceptance_criteria:
+  - "Given a short synthetic video, when bin/thumbnail.py <video> <slug> runs with VIDEO_THUMBNAIL_COUNT=4, then work/<slug>/thumbnails/ contains exactly 4 frame-NN.jpg files and the script exits 0."
+  - "Given the same slug already has 4 extracted frames, when bin/thumbnail.py runs again without VIDEO_FORCE, then extraction is skipped (reported), and VIDEO_FORCE=1 forces re-extraction."
+  - "Given VIDEO_JUDGE_PROVIDER=mock, when bin/thumbnail.py runs, then work/<slug>/thumbnail.jpg (a copy of frame-01.jpg) and thumbnail-pick.md are written, with zero network calls."
+  - "Given VIDEO_JUDGE_PROVIDER=gemini and no GEMINI_API_KEY set, when bin/thumbnail.py runs, then frame extraction still succeeds, a picking-skipped warning is printed, no thumbnail.jpg is written, and the script exits 0 (not fatal)."
+  - "Given work/<slug>/thumbnail.jpg already exists, when bin/thumbnail.py runs again with VIDEO_JUDGE_PROVIDER=mock and no VIDEO_FORCE, then picking is skipped (reported) even though frame extraction may still run/skip independently."
+
+steps:
+  - id: research
+    description: Confirm ffprobe's duration-read invocation (bin/ingest.sh's ffprobe pattern) and the exact ffmpeg single-frame-extraction flags (-ss before -i for fast seek, -frames:v 1, -q:v 2 for JPEG quality).
+    agent: researcher
+  - id: implement
+    description: Write bin/thumbnail.py (extraction + resumability), extend bin/lib/providers/base.py's docstring with the pick_frame contract, and implement pick_frame in both gemini.py and mock.py.
+    agent: developer
+    depends_on: [research]
+  - id: test
+    description: Exercise all five acceptance criteria against a synthetic sample, covering both the mock-provider happy path and the no-key graceful-degradation path.
+    agent: tester
+    depends_on: [implement]
+  - id: review
+    description: Confirm picking failures never propagate as a non-zero exit when extraction succeeded, and that review()'s existing behavior/signature is unchanged.
+    agent: reviewer
+    depends_on: [test]
+  - id: integrate
+    description: Commit and push to the feature branch.
+    agent: developer
+    depends_on: [review]
+
+context:
+  codebase: .
+  tech_stack:
+    languages: [python, bash]
+  key_files:
+    - path: bin/review.py
+      purpose: "Precedent for a python tool resolving a provider via VIDEO_JUDGE_PROVIDER/importlib and reading env-config."
+    - path: bin/lib/providers/gemini.py
+      purpose: "Where pick_frame is added; _get_key() and the curl-based generateContent call pattern are reused."
+    - path: bin/ingest.sh
+      purpose: "ffprobe invocation precedent (duration read) to mirror in Python via subprocess."
+
+files_to_modify:
+  - file: bin/thumbnail.py
+    change: "New file — the thumbnail tool."
+  - file: bin/lib/providers/base.py
+    change: "Document the new optional pick_frame(image_paths, prompt) -> int capability alongside review()."
+  - file: bin/lib/providers/gemini.py
+    change: "Add pick_frame() using inline base64 image parts + generateContent."
+  - file: bin/lib/providers/mock.py
+    change: "Add pick_frame() returning 1 always."
+  - file: bin/video
+    change: "Add a `thumbnail` subcommand."
+  - file: .env.example
+    change: "Document VIDEO_THUMBNAIL_COUNT."
+
+code_examples:
+  - title: "ffprobe duration-read precedent to adapt (bash -> Python subprocess)"
+    file: bin/ingest.sh
+    snippet: |
+      ffprobe -v quiet -print_format json -show_format -show_streams "$MP4" > "$W/meta.json"
+      DUR=$(python3 -c "import json;print(round(float(json.load(open('$W/meta.json'))['format']['duration'])))")
+  - title: "gemini.py's existing curl-based generateContent call to mirror for pick_frame"
+    file: bin/lib/providers/gemini.py
+    snippet: |
+      r = _sh(["curl", "-s", "-X", "POST",
+               f"{API}/v1beta/models/{MODEL}:generateContent?key={key}",
+               "-H", "Content-Type: application/json", "-d", f"@{bf.name}"])
+      d = json.loads(r.stdout)
+      if "candidates" not in d:
+          sys.exit(f"Gemini error: {json.dumps(d)[:400]}")
+
+design_decisions:
+  - decision: "pick_frame is optional (hasattr check), not a required part of the provider interface."
+    rationale: "review() and pick_frame are genuinely different capabilities (video-in-text-out vs images-in-index-out) — forcing every provider to implement both would make adding a review-only or thumbnail-only provider harder than necessary."
+  - decision: "Picking is wrapped in try/except at the call site, not just inside gemini.py."
+    rationale: "Defense-in-depth: gemini.py's _get_key() intentionally sys.exits for review() (a fatal condition there), and thumbnail.py must not inherit that fatality for an enhancement step whose failure shouldn't discard already-extracted frames."
+
+cross_cutting:
+  - concern: documentation
+    action: "Add a row to README.md's tool table, a 'Thumbnails' section to docs/ARCHITECTURE.md (including the pick_frame provider capability), and document VIDEO_THUMBNAIL_COUNT in .env.example."
+  - concern: honest-status
+    action: "Flip ROADMAP.md's 'Thumbnail generator' bullet to ✅ once all five acceptance criteria pass, noting picking is provider-dependent/best-effort."
+  - concern: env-config-only
+    action: "VIDEO_THUMBNAIL_COUNT added to .env.example; no hardcoded frame count or JPEG quality in bin/thumbnail.py."
+  - concern: no-secrets-no-media-in-git
+    action: "thumbnails/ and thumbnail.jpg land under work/<slug>/, already covered by the existing 'work/' .gitignore line."
+
+risks:
+  - severity: low
+    description: "Very short synthetic test clips (used in tests/smoke.sh) may not have enough distinct frames for N well-spaced extractions to look meaningfully different — acceptable for correctness testing, not a real thumbnail-quality signal."
+    mitigation: "Out of scope — the acceptance criteria test file existence/count/skip behavior, not visual quality, which only matters for real recordings."
+
+references:
+  - path: docs/ROADMAP.md
+    relevant_excerpt: |
+      🔲 **Thumbnail generator** — pull candidate frames + an LLM-picked "best hook frame."

@@ -7,6 +7,11 @@ Select with VIDEO_JUDGE_PROVIDER=mock.
 """
 
 
+def pick_frame(image_paths, prompt):
+    """Always picks the first frame — deterministic, no network."""
+    return 1
+
+
 def review(video_path, transcript, prompt):
     transcript_line = f"\n\n(mock saw transcript: {transcript.strip()})" if transcript else ""
     return f"""## REVIEW

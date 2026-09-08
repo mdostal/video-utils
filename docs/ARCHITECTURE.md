@@ -89,6 +89,14 @@ skipped as sources). Plain center crop computed from the probed source width/hei
 face/subject-aware centering** (that would need a detection model dependency; out of scope for now,
 tracked as a gap in docs/ROADMAP.md rather than silently dropped).
 
+## Thumbnails (thumbnail.py)
+Always extracts `VIDEO_THUMBNAIL_COUNT` (default 6) evenly-spaced candidate frames via ffmpeg into
+`work/<slug>/thumbnails/frame-NN.jpg` — free, local, deterministic. If the resolved judge provider
+implements the optional `pick_frame(image_paths, prompt) -> int` capability (see below), asks it to
+pick the best "hook frame" -> `work/<slug>/thumbnail.jpg` + `thumbnail-pick.md`. Picking is
+best-effort: no `pick_frame` on the provider, a missing key, or any error during picking degrades
+gracefully (extraction's output is untouched, exit 0) rather than failing the whole run.
+
 ## Batch mode (batch.sh)
 `batch.sh [raws-dir]` (default `$VIDEO_RAWS`, then `./raws`) runs the full pipeline — ingest ->
 transcribe -> review -> clip (JSON-driven) -> caption -> reframe — unattended over every
@@ -100,16 +108,20 @@ makes re-running `batch.sh` over the same folder cheap — already-completed sta
 ## Judge providers (bin/lib/providers/)
 `review.py` is a thin, provider-agnostic CLI: it resolves the transcript (if any) and the review
 prompt (`VIDEO_REVIEW_PROMPT` or the built-in default), then delegates to a provider module selected
-by `VIDEO_JUDGE_PROVIDER` (default `gemini`). A provider exposes one function —
-`review(video_path, transcript, prompt) -> str` (see `bin/lib/providers/base.py`) — and owns all of
-its own config (API keys, model names). `review.py` parses the returned text for a `REVIEW` section
-and a fenced `clips.json` block; that parsing is provider-agnostic.
+by `VIDEO_JUDGE_PROVIDER` (default `gemini`). A provider exposes `review(video_path, transcript,
+prompt) -> str` (see `bin/lib/providers/base.py`) and, optionally, `pick_frame(image_paths, prompt)
+-> int` (used by `thumbnail.py` — a provider may implement either, both, or neither). Providers own
+all of their own config (API keys, model names). `review.py` parses the returned text for a `REVIEW`
+section and a fenced `clips.json` block; that parsing is provider-agnostic.
 
 - **`gemini`** (default) — uploads the video to the Gemini File API, polls until `ACTIVE`, then calls
-  `generateContent` (`gemini-2.5-flash` by default, `VIDEO_MODEL` to override). The key is read from
+  `generateContent` (`gemini-2.5-flash` by default, `VIDEO_MODEL` to override) for `review()`; for
+  `pick_frame()`, sends the candidate JPEGs as inline base64 image parts (no File API upload needed —
+  they're small) and parses the first number out of the response. The key is read from
   `GEMINI_API_KEY` or gcloud (`GEMINI_SECRET_NAME`/`GEMINI_SECRET_PROJECT`) and never printed.
-- **`mock`** — a network-free provider for tests and local iteration: returns a canned response
-  (echoing the transcript back if one was passed), no key or network needed. `VIDEO_JUDGE_PROVIDER=mock`.
+- **`mock`** — a network-free provider for tests and local iteration: `review()` returns a canned
+  response (echoing the transcript back if one was passed); `pick_frame()` always returns `1`. No key
+  or network needed. `VIDEO_JUDGE_PROVIDER=mock`.
 
 Only one real backend ships today; the interface is proven pluggable via `mock`, not via a second
 real provider (adding e.g. OpenAI/Claude would be a future ROADMAP item needing its own API key).

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # End-to-end smoke test against a synthetic (never committed) sample clip.
 # Covers: ingest.sh, review.py (via VIDEO_JUDGE_PROVIDER=mock, no real API
-# call), caption.sh, clip.sh, reframe.sh, transcribe.sh's missing-binary
-# path, and resumability (VIDEO_FORCE=1) for each.
-# NOT covered: review.py's real Gemini call (needs a paid GEMINI_API_KEY) and
-# transcribe.sh's real-transcription happy path (needs a real whisper binary).
+# call), caption.sh, clip.sh, reframe.sh, thumbnail.py (extraction always,
+# mock-provider picking, and graceful degradation with no key), batch.sh,
+# transcribe.sh's missing-binary path, and resumability (VIDEO_FORCE=1) for
+# each.
+# NOT covered: review.py's/thumbnail.py's real Gemini calls (need a paid
+# GEMINI_API_KEY) and transcribe.sh's real-transcription happy path (needs a
+# real whisper binary).
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="$HERE/../bin"
@@ -131,6 +134,26 @@ VIDEO_FORCE=1 "$BIN/reframe.sh" demo >/dev/null
 m3=$(mtime "$TMP/clips/demo/testclip.9x16.mp4")
 [ "$m3" != "$m2" ] || fail "VIDEO_FORCE=1 did not force a redo (reframe.sh)"
 pass "reframe.sh resumability (skip + VIDEO_FORCE=1)"
+
+# --- thumbnail.py: extraction (always) + picking (mock provider, no real API) ---
+VIDEO_THUMBNAIL_COUNT=3 VIDEO_JUDGE_PROVIDER=mock "$BIN/thumbnail.py" "$SAMPLE" demo >/dev/null
+n=$(ls "$TMP/work/demo/thumbnails"/frame-*.jpg 2>/dev/null | wc -l | tr -d ' ')
+[ "$n" = "3" ] || fail "expected 3 thumbnail frames, got $n"
+assert_file "$TMP/work/demo/thumbnail.jpg" "thumbnail.py mock pick"
+pass "thumbnail.py extracted 3 frames and mock-picked one"
+
+m1=$(mtime "$TMP/work/demo/thumbnails/frame-01.jpg"); sleep 1.1
+out="$(VIDEO_THUMBNAIL_COUNT=3 VIDEO_JUDGE_PROVIDER=mock "$BIN/thumbnail.py" "$SAMPLE" demo)"
+echo "$out" | grep -qi "skip" || fail "thumbnail.py did not report a skip on re-run"
+m2=$(mtime "$TMP/work/demo/thumbnails/frame-01.jpg")
+[ "$m1" = "$m2" ] || fail "thumbnail.py re-extracted despite existing frames"
+pass "thumbnail.py resumability (extraction + pick both skip on re-run)"
+
+rc=0
+env -u GEMINI_API_KEY -u GEMINI_SECRET_NAME VIDEO_JUDGE_PROVIDER=gemini VIDEO_FORCE=1 \
+  "$BIN/thumbnail.py" "$SAMPLE" demo >/dev/null || rc=$?
+[ "$rc" -eq 0 ] || fail "thumbnail.py should exit 0 even when picking fails (no Gemini key)"
+pass "thumbnail.py degrades gracefully when picking fails (no key, still exit 0)"
 
 # --- batch.sh: unattended folder pass (mock provider, no real API) ---
 BATCH_RAWS="$TMP/batch-raws"

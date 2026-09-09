@@ -68,3 +68,7 @@ suite (`tests/smoke.sh`, CI-integrated) covers most of the pipeline; contributio
 
 ## License
 MIT — see `LICENSE`.
+
+## 📖 Documentation
+
+Full docs: **https://mdostal.github.io/video-utils/**

@@ -1,0 +1,38 @@
+site_name: video-utils
+site_description: >-
+  Composable CLI tools for a build-in-public video pipeline: pull, ingest, LLM-judge, clip.
+site_url: https://mdostal.github.io/video-utils/
+repo_url: https://github.com/mdostal/video-utils
+repo_name: mdostal/video-utils
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep orange
+      accent: orange
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.top
+    - navigation.sections
+    - navigation.instant
+    - content.code.copy
+    - search.suggest
+    - toc.follow
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - tables
+  - toc:
+      permalink: true
+plugins:
+  - search

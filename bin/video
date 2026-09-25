@@ -20,6 +20,7 @@ subcommands:
   batch       [raws-dir]                      Run the full pipeline unattended over a raws folder
   dashboard   [port]                          Local web view of work/clips (127.0.0.1 only)
   backup      [raws-dir]                      Push raws to a backup target via rclone
+  publish     <ready-dir> [--brand B] [...]   Send a ready/<slug>/ bundle to Flayr as draft posts
 
   video --help | -h | (no args)               Show this help
 EOF
@@ -52,6 +53,8 @@ case "$1" in
     shift; exec "$HERE/dashboard.py" "$@" ;;
   backup)
     shift; exec "$HERE/backup.sh" "$@" ;;
+  publish)
+    shift; exec "$HERE/flayr-publish.py" "$@" ;;
   *)
     echo "video: unknown subcommand '$1'" >&2
     usage >&2

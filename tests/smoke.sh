@@ -5,7 +5,8 @@
 # mock-provider picking, and graceful degradation with no key), batch.sh,
 # dashboard.py (index/slug/media routes + path-traversal guard), backup.sh
 # (real rclone copy if rclone is installed, else its graceful-degradation
-# path), transcribe.sh's missing-binary path, and resumability
+# path), transcribe.sh's missing-binary path, flayr-publish.py (against
+# tests/mock_flayr.py — no real Flayr call), and resumability
 # (VIDEO_FORCE=1) for each.
 # NOT covered: review.py's/thumbnail.py's real Gemini calls (need a paid
 # GEMINI_API_KEY) and transcribe.sh's real-transcription happy path (needs a
@@ -16,8 +17,10 @@ BIN="$HERE/../bin"
 
 TMP="$(mktemp -d)"
 DASH_PID=""
+MOCK_PID=""
 cleanup() {
   [ -n "$DASH_PID" ] && kill "$DASH_PID" 2>/dev/null || true
+  [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null || true
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -249,5 +252,55 @@ else
   echo "$out" | grep -qi "rclone" || fail "backup.sh did not report missing rclone clearly"
   pass "backup.sh degrades gracefully when rclone is not installed"
 fi
+
+# --- flayr-publish.py: against a local mock of the Flayr v2 API ---
+READY="$TMP/ready/pub-demo"
+mkdir -p "$READY"
+cp "$SAMPLE" "$READY/01-hook.mp4"
+cp "$SAMPLE" "$READY/02-payoff.mp4"
+echo "Shared caption for the bundle" > "$READY/caption.md"
+echo "Hook-specific caption" > "$READY/01-hook.md"
+
+out="$("$BIN/flayr-publish.py" "$READY" --brand "Dostal Tech" --platforms linkedin --dry-run)"
+echo "$out" | grep -q "send: 01-hook.mp4" || fail "flayr-publish.py --dry-run did not list the clips"
+pass "flayr-publish.py --dry-run lists the bundle without network"
+
+rc=0; env -u FLAYR_API_KEY "$BIN/flayr-publish.py" "$READY" >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "flayr-publish.py should fail without FLAYR_API_KEY"
+pass "flayr-publish.py refuses to run without FLAYR_API_KEY"
+
+MOCK_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+MOCK_LOG="$TMP/mock-flayr.jsonl"
+python3 "$HERE/mock_flayr.py" "$MOCK_PORT" "$MOCK_LOG" & MOCK_PID=$!
+for _ in $(seq 1 50); do curl -s "http://127.0.0.1:$MOCK_PORT/" >/dev/null 2>&1 && break; sleep 0.1; done
+export FLAYR_API_URL="http://127.0.0.1:$MOCK_PORT" FLAYR_API_KEY="flayr_sk_test"
+
+"$BIN/flayr-publish.py" "$READY" --brand "dostal tech" --platforms linkedin,youtube >/dev/null
+assert_file "$READY/flayr.json" "flayr-publish receipt"
+[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "2" ] || fail "flayr-publish.py should create one draft per clip"
+python3 - "$MOCK_LOG" <<'PY' || fail "flayr-publish.py sent the wrong draft payload"
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1])]
+hook = next(r for r in rows if r["text"] == "Hook-specific caption")
+other = next(r for r in rows if r["text"] == "Shared caption for the bundle")
+assert hook["brandId"] == "cp_tech" and other["brandId"] == "cp_tech"
+assert hook["platforms"] == ["linkedin", "youtube"]
+assert hook["videoStorageId"].startswith("st_") and hook["sourceLabel"] == "video-pipeline: pub-demo"
+PY
+pass "flayr-publish.py uploads each clip and files a draft in the named brand"
+
+out="$("$BIN/flayr-publish.py" "$READY" --brand "Dostal Tech")"
+echo "$out" | grep -qi "skip" || fail "flayr-publish.py did not skip already-sent clips"
+[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "2" ] || fail "flayr-publish.py re-sent clips on re-run"
+pass "flayr-publish.py is resumable (skips clips recorded in flayr.json)"
+
+rc=0; VIDEO_FORCE=1 "$BIN/flayr-publish.py" "$READY" --brand "Nope Brand" >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] || fail "flayr-publish.py should fail for an unknown brand"
+pass "flayr-publish.py fails clearly for an unknown brand"
+
+kill "$MOCK_PID" 2>/dev/null || true
+wait "$MOCK_PID" 2>/dev/null || true
+MOCK_PID=""
+unset FLAYR_API_URL FLAYR_API_KEY
 
 echo "[smoke] ALL PASS"

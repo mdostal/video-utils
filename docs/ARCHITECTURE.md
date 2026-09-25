@@ -143,3 +143,12 @@ section and a fenced `clips.json` block; that parsing is provider-agnostic.
 
 Only one real backend ships today; the interface is proven pluggable via `mock`, not via a second
 real provider (adding e.g. OpenAI/Claude would be a future ROADMAP item needing its own API key).
+
+## Publish to Flayr (flayr-publish.py)
+`flayr-publish.py <ready-dir>` is the hand-off from `ready/<slug>/` to [Flayr](https://flayr.social):
+each `*.mp4` is uploaded (`POST /api/v2/media/upload-url`, then the bytes to the returned URL) and
+filed as a **draft** (`POST /api/v2/content`) with its caption — `<clip>.md` beside the clip, else the
+bundle's `caption.md`. `--brand` takes a Flayr brand name or id (resolved via `GET /api/v2/brands`) or
+`personal`; omitted, Flayr uses the brand last active in its dashboard. Sent clips are recorded in
+`<ready-dir>/flayr.json`, so re-runs skip them (`VIDEO_FORCE=1` re-sends). Nothing is posted: the
+drafts are scheduled, or added to a campaign, in Flayr.

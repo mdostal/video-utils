@@ -53,8 +53,11 @@ Legend: ✅ built · 🚧 partial · 🔲 planned.
 ## Integrations
 All four items below need an operator decision (which service, which API key/credential) before any
 code can be written — none are silently buildable the way Backup adapter turned out to be.
-- 🔲 **Flayr publish hook** — POST finished `ready/<slug>/` assets + caption to the Flayr API for
-  cross-post scheduling. Operator follow-up in progress (as of 2026-09-08).
+- ✅ **Flayr publish hook** — `bin/flayr-publish.py` uploads each clip in `ready/<slug>/` and files
+  it as a Flayr draft (caption from `<clip>.md` or `caption.md`) in a named brand, via Flayr's v2 API
+  (`/api/v2/media/upload-url`, `/api/v2/brands`, `/api/v2/content`). Drafts only — scheduling and
+  campaigns happen in Flayr. Covered by `tests/smoke.sh` against a local mock of the API; the real
+  API call needs a Flayr API key.
 - 🔲 **Opus Clip hook** — a public API now exists (`developer.opus.pro`, v2, API-key auth, checked
   2026-09-08) — this bullet is no longer gated on "if/when a public API exists". Needs an
   `OPUS_API_KEY` decision from the operator before building the integration; the manual-upload

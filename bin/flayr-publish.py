@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import pathlib
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -40,6 +41,26 @@ class FlayrError(Exception):
     pass
 
 
+def _ssl_context():
+    """CA bundle for HTTPS. python.org builds of Python on macOS ship without
+    one ("Install Certificates.command"), so the default context fails every
+    verification; fall back to certifi, then the system bundle."""
+    if os.environ.get("SSL_CERT_FILE"):
+        return ssl.create_default_context()
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        pass
+    for bundle in ("/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt"):
+        if os.path.isfile(bundle):
+            return ssl.create_default_context(cafile=bundle)
+    return ssl.create_default_context()
+
+
+SSL_CONTEXT = _ssl_context()
+
+
 def api(base, key, method, path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
@@ -47,7 +68,7 @@ def api(base, key, method, path, body=None):
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as res:
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=SSL_CONTEXT) as res:
             return json.loads(res.read() or b"{}")
     except urllib.error.HTTPError as e:
         try:
@@ -65,7 +86,7 @@ def upload(upload_url, clip):
         headers={"Content-Type": "video/mp4"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=UPLOAD_TIMEOUT) as res:
+        with urllib.request.urlopen(req, timeout=UPLOAD_TIMEOUT, context=SSL_CONTEXT) as res:
             storage_id = json.loads(res.read()).get("storageId")
     except (urllib.error.URLError, ValueError) as e:
         raise FlayrError(f"upload of {clip.name} failed: {e}") from None

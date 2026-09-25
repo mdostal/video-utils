@@ -11,7 +11,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT, LOG = int(sys.argv[1]), sys.argv[2]
-STATE = {"uploads": 0, "content": 0}
+STATE = {"uploads": 0, "content": 0, "upload_url_calls": 0}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -49,6 +49,15 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/v2/media/upload-url":
             self._body()
+            STATE["upload_url_calls"] += 1
+            # Every 3rd call is rate-limited once, like the real API under load.
+            if STATE["upload_url_calls"] % 3 == 0:
+                data = json.dumps({"error": "Too many requests"}).encode()
+                self.send_response(429)
+                self.send_header("Retry-After", "1")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                return self.wfile.write(data)
             return self._json(200, {"uploadUrl": f"http://127.0.0.1:{PORT}/upload"})
         if self.path == "/api/v2/content":
             body = json.loads(self._body())

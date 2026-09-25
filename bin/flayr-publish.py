@@ -25,6 +25,7 @@ import os
 import pathlib
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 
@@ -34,6 +35,8 @@ videoconfig.apply_defaults()
 
 RECEIPT = "flayr.json"
 TIMEOUT = 60
+MAX_RATE_LIMIT_RETRIES = 6
+DEFAULT_RETRY_AFTER = 30
 UPLOAD_TIMEOUT = 600
 
 
@@ -62,6 +65,24 @@ SSL_CONTEXT = _ssl_context()
 
 
 def api(base, key, method, path, body=None):
+    """One Flayr API call; waits out HTTP 429 (Retry-After, else 30s) a few times."""
+    for attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
+        try:
+            return _api_once(base, key, method, path, body)
+        except RateLimited as e:
+            if attempt == MAX_RATE_LIMIT_RETRIES:
+                raise FlayrError(f"{method} {path} -> still rate-limited after {attempt} retries") from None
+            print(f"[flayr-publish] rate-limited; waiting {e.wait}s", flush=True)
+            time.sleep(e.wait)
+
+
+class RateLimited(Exception):
+    def __init__(self, wait):
+        super().__init__(wait)
+        self.wait = wait
+
+
+def _api_once(base, key, method, path, body):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
         f"{base}{path}", data=data, method=method,
@@ -71,6 +92,12 @@ def api(base, key, method, path, body=None):
         with urllib.request.urlopen(req, timeout=TIMEOUT, context=SSL_CONTEXT) as res:
             return json.loads(res.read() or b"{}")
     except urllib.error.HTTPError as e:
+        if e.code == 429:
+            try:
+                wait = max(1, int(e.headers.get("Retry-After", "")))
+            except ValueError:
+                wait = int(os.environ.get("FLAYR_RETRY_AFTER", DEFAULT_RETRY_AFTER))
+            raise RateLimited(wait) from None
         try:
             detail = json.loads(e.read()).get("error", "")
         except Exception:

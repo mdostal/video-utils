@@ -258,6 +258,7 @@ READY="$TMP/ready/pub-demo"
 mkdir -p "$READY"
 cp "$SAMPLE" "$READY/01-hook.mp4"
 cp "$SAMPLE" "$READY/02-payoff.mp4"
+cp "$SAMPLE" "$READY/03-extra.mp4"  # 3rd upload hits the mock's one-off 429
 echo "Shared caption for the bundle" > "$READY/caption.md"
 echo "Hook-specific caption" > "$READY/01-hook.md"
 
@@ -275,9 +276,10 @@ python3 "$HERE/mock_flayr.py" "$MOCK_PORT" "$MOCK_LOG" & MOCK_PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:$MOCK_PORT/" >/dev/null 2>&1 && break; sleep 0.1; done
 export FLAYR_API_URL="http://127.0.0.1:$MOCK_PORT" FLAYR_API_KEY="flayr_sk_test"
 
-"$BIN/flayr-publish.py" "$READY" --brand "dostal tech" --platforms linkedin,youtube >/dev/null
+out="$("$BIN/flayr-publish.py" "$READY" --brand "dostal tech" --platforms linkedin,youtube)"
+echo "$out" | grep -q "rate-limited" || fail "flayr-publish.py did not wait out the mock 429"
 assert_file "$READY/flayr.json" "flayr-publish receipt"
-[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "2" ] || fail "flayr-publish.py should create one draft per clip"
+[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "3" ] || fail "flayr-publish.py should create one draft per clip"
 python3 - "$MOCK_LOG" <<'PY' || fail "flayr-publish.py sent the wrong draft payload"
 import json, sys
 rows = [json.loads(l) for l in open(sys.argv[1])]
@@ -287,11 +289,11 @@ assert hook["brandId"] == "cp_tech" and other["brandId"] == "cp_tech"
 assert hook["platforms"] == ["linkedin", "youtube"]
 assert hook["videoStorageId"].startswith("st_") and hook["sourceLabel"] == "video-pipeline: pub-demo"
 PY
-pass "flayr-publish.py uploads each clip and files a draft in the named brand"
+pass "flayr-publish.py uploads each clip and files a draft in the named brand (waiting out a 429)"
 
 out="$("$BIN/flayr-publish.py" "$READY" --brand "Dostal Tech")"
 echo "$out" | grep -qi "skip" || fail "flayr-publish.py did not skip already-sent clips"
-[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "2" ] || fail "flayr-publish.py re-sent clips on re-run"
+[ "$(wc -l < "$MOCK_LOG" | tr -d ' ')" = "3" ] || fail "flayr-publish.py re-sent clips on re-run"
 pass "flayr-publish.py is resumable (skips clips recorded in flayr.json)"
 
 rc=0; VIDEO_FORCE=1 "$BIN/flayr-publish.py" "$READY" --brand "Nope Brand" >/dev/null 2>&1 || rc=$?
